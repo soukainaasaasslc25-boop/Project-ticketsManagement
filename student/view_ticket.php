@@ -95,26 +95,16 @@ $sts_cfg = [
 </head>
 <body class="bg-slate-100 font-sans min-h-screen">
 
-<!-- NAV -->
-<nav class="bg-gradient-to-r from-blue-900 to-blue-600 shadow-lg sticky top-0 z-50">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <a href="/pfe/student/dashboard.php" class="flex items-center gap-2 text-white font-bold">
-            <i class="bi bi-ticket-perforated-fill text-blue-300"></i> TicketSystem
-        </a>
-        <div class="flex items-center gap-1 text-sm flex-wrap">
-            <a href="/pfe/student/dashboard.php"      class="text-blue-200 hover:text-white hover:bg-white/10 px-3 py-1.5 rounded-lg transition"><i class="bi bi-grid me-1"></i>Dashboard</a>
-            <a href="/pfe/student/my_tickets.php"     class="text-blue-200 hover:text-white hover:bg-white/10 px-3 py-1.5 rounded-lg transition"><i class="bi bi-ticket-detailed me-1"></i>Mes tickets</a>
-            <a href="/pfe/student/drafts.php"         class="text-blue-200 hover:text-white hover:bg-white/10 px-3 py-1.5 rounded-lg transition"><i class="bi bi-pencil-square me-1"></i>Brouillons</a>
-            <a href="/pfe/auth/logout.php"            class="text-red-300 hover:text-red-100 hover:bg-white/10 px-3 py-1.5 rounded-lg transition ml-2"><i class="bi bi-box-arrow-left me-1"></i>Déconnexion</a>
-        </div>
-    </div>
-</nav>
+<?php include __DIR__ . '/includes/sidebar.php'; ?>
+
+<div class="main-content">
 
 <div class="max-w-4xl mx-auto px-4 py-8">
     
     <div class="mb-4">
-        <a href="/pfe/student/my_tickets.php" class="text-sm text-slate-500 hover:text-blue-600 transition flex items-center gap-1">
-            <i class="bi bi-arrow-left"></i> Retour à mes tickets
+        <?php $back_url = $ticket['type'] === 'complaint' ? '/student/reclamations.php' : '/student/demandes.php'; ?>
+        <a href="/pfe<?= $back_url ?>" class="text-sm text-slate-500 hover:text-blue-600 transition flex items-center gap-1">
+            <i class="bi bi-arrow-left"></i> Retour
         </a>
     </div>
 
@@ -224,6 +214,7 @@ $sts_cfg = [
         </div>
     <?php endif; ?>
 
+</div>
 </div>
 </body>
 </html>

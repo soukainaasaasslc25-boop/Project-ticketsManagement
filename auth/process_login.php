@@ -106,12 +106,13 @@ session_regenerate_id(true);
 // Do NOT store the password hash or sensitive data in session.
 // =============================================================================
 
-$_SESSION['user_id']        = $user['id'];
-$_SESSION['username']       = $user['username'];
-$_SESSION['role']           = $user['role'];
-$_SESSION['first_name']     = $user['first_name'];
-$_SESSION['last_name']      = $user['last_name'];
-$_SESSION['account_status'] = $user['account_status'];
+$_SESSION['user_id']              = $user['id'];
+$_SESSION['username']             = $user['username'];
+$_SESSION['role']                 = $user['role'];
+$_SESSION['first_name']           = $user['first_name'];
+$_SESSION['last_name']            = $user['last_name'];
+$_SESSION['account_status']       = $user['account_status'];
+$_SESSION['must_change_password'] = (int) ($user['must_change_password'] ?? 0);
 
 // =============================================================================
 // STEP 8: Handle "Remember Me" checkbox
@@ -173,6 +174,10 @@ if ($remember_me) {
 if ($user['role'] === 'admin') {
     header('Location: /pfe/admin/dashboard.php');
 } else {
-    header('Location: /pfe/student/dashboard.php');
+    if ($_SESSION['must_change_password'] === 1) {
+        header('Location: /pfe/student/profile.php?first_login=1');
+    } else {
+        header('Location: /pfe/student/dashboard.php');
+    }
 }
 exit();

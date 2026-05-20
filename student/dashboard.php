@@ -1,307 +1,237 @@
 <?php
-// =============================================================================
-// FILE    : student/dashboard.php
-// PURPOSE : Student dashboard — shows the student their own tickets.
-//           Protected by require_student() — only students can access.
-// =============================================================================
-
 require_once __DIR__ . '/../auth/auth_check.php';
 require_student();
-
 require_once __DIR__ . '/../config/database.php';
-
-// =============================================================================
-// Fetch this student's tickets grouped by status
-// We use $_SESSION['user_id'] which was set during login — never trust GET/POST
-// =============================================================================
+require_once __DIR__ . '/../includes/functions.php';
 
 $student_id = $_SESSION['user_id'];
 
-// All tickets belonging to this student (exclude deleted ones)
-$stmt = $pdo->prepare('
-    SELECT t.*, c.name AS category_name
-    FROM tickets t
-    JOIN categories c ON c.id = t.category_id
-    WHERE t.user_id = ?
-    ORDER BY t.created_at DESC
-    LIMIT 10
-');
-$stmt->execute([$student_id]);
-$my_tickets = $stmt->fetchAll();
-
-// Count tickets by status for this student
-$stmt = $pdo->prepare('
-    SELECT status, COUNT(*) AS cnt
-    FROM tickets
+// Stats queries
+// Total, Demandes, Reclamations, Brouillons, Completes
+$stmt = $pdo->prepare("
+    SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN type = 'request' AND status != 'draft' THEN 1 ELSE 0 END) as demandes,
+        SUM(CASE WHEN type = 'complaint' AND status != 'draft' THEN 1 ELSE 0 END) as reclamations,
+        SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as drafts,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) as new,
+        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+        SUM(CASE WHEN status = 'opened' THEN 1 ELSE 0 END) as opened,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
+    FROM tickets 
     WHERE user_id = ?
-    GROUP BY status
-');
+");
 $stmt->execute([$student_id]);
-$status_counts = [];
-foreach ($stmt->fetchAll() as $row) {
-    $status_counts[$row['status']] = $row['cnt'];
-}
+$stats = $stmt->fetch();
 
-$total_my_tickets = array_sum($status_counts);
+// Recent updates (last 5 tickets)
+$stmt = $pdo->prepare("
+    SELECT t.id, t.reference, t.subject, t.status, t.type, t.updated_at 
+    FROM tickets t
+    WHERE t.user_id = ? AND t.status != 'draft'
+    ORDER BY t.updated_at DESC LIMIT 5
+");
+$stmt->execute([$student_id]);
+$recent_tickets = $stmt->fetchAll();
+
+// Latest admin responses (ticket_responses where is_internal=0 and sender is admin)
+$stmt = $pdo->prepare("
+    SELECT r.message, r.created_at, t.reference, t.id as ticket_id
+    FROM ticket_responses r
+    JOIN tickets t ON t.id = r.ticket_id
+    JOIN users u ON u.id = r.sender_id
+    WHERE t.user_id = ? AND u.role = 'admin' AND r.is_internal = 0
+    ORDER BY r.created_at DESC LIMIT 5
+");
+$stmt->execute([$student_id]);
+$recent_responses = $stmt->fetchAll();
+
+// Get must change password flag
+$must_change_password = $_SESSION['must_change_password'] ?? 0;
 ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mon Espace — Système de Tickets</title>
+    <title>Dashboard — Espace Étudiant</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
-
-        /* Top navigation bar */
-        .topnav {
-            background: #0f172a;
-            padding: 0.85rem 2rem;
-            display: flex; justify-content: space-between; align-items: center;
-            position: sticky; top: 0; z-index: 100;
-        }
-        .topnav-brand {
-            color: white; font-weight: 700; font-size: 1rem;
-            display: flex; align-items: center; gap: 0.6rem;
-            text-decoration: none;
-        }
-        .topnav-menu a {
-            color: #94a3b8; font-size: 0.87rem; text-decoration: none;
-            padding: 0.4rem 0.85rem; border-radius: 8px;
-            transition: all 0.2s;
-        }
-        .topnav-menu a:hover, .topnav-menu a.active {
-            background: rgba(255,255,255,0.08); color: white;
-        }
-
-        /* Page wrapper */
-        .page-wrapper { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
-
-        /* Stat mini cards */
-        .mini-card {
-            background: white; border-radius: 12px;
-            padding: 1.25rem; border: 1px solid #f1f5f9;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            text-align: center;
-        }
-        .mini-card .val { font-size: 1.8rem; font-weight: 700; color: #1e293b; line-height: 1; }
-        .mini-card .lbl { font-size: 0.78rem; color: #64748b; margin-top: 0.3rem; }
-
-        /* Ticket cards */
-        .ticket-item {
-            background: white; border-radius: 12px;
-            padding: 1.25rem 1.5rem;
-            border: 1px solid #f1f5f9;
-            margin-bottom: 0.75rem;
-            display: flex; align-items: center; justify-content: space-between;
-            gap: 1rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-            transition: box-shadow 0.2s;
-        }
-        .ticket-item:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-
-        .ticket-ref {
-            font-size: 0.75rem; font-weight: 600;
-            color: #3b82f6; font-family: monospace;
-        }
-        .ticket-subject { font-weight: 600; color: #1e293b; font-size: 0.95rem; }
-        .ticket-meta { font-size: 0.8rem; color: #64748b; }
-
-        .status-badge {
-            font-size: 0.75rem; font-weight: 600;
-            padding: 0.3em 0.8em; border-radius: 20px;
-            white-space: nowrap;
-        }
-        .status-draft       { background:#f1f5f9; color:#64748b; }
-        .status-new         { background:#fef3c7; color:#d97706; }
-        .status-opened      { background:#dbeafe; color:#1d4ed8; }
-        .status-in_progress { background:#ede9fe; color:#6d28d9; }
-        .status-completed   { background:#d1fae5; color:#059669; }
-        .status-rejected    { background:#fee2e2; color:#dc2626; }
-
-        /* Action button */
-        .btn-new-ticket {
-            background: linear-gradient(135deg, #1e40af, #3b82f6);
-            color: white; border: none; border-radius: 10px;
-            padding: 0.7rem 1.5rem; font-weight: 600; font-size: 0.9rem;
-            text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;
-            transition: all 0.2s;
-        }
-        .btn-new-ticket:hover {
-            color: white; transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(59,130,246,0.35);
-        }
-
-        /* Welcome banner */
-        .welcome-banner {
-            background: linear-gradient(135deg, #1e40af, #3b82f6);
-            border-radius: 16px; padding: 1.75rem 2rem;
-            color: white; margin-bottom: 1.5rem;
-            display: flex; justify-content: space-between; align-items: center;
-            flex-wrap: wrap; gap: 1rem;
-        }
-        .welcome-banner h4 { font-weight: 700; margin: 0 0 0.25rem; }
-        .welcome-banner p  { margin: 0; opacity: 0.85; font-size: 0.9rem; }
-    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-<!-- ========================================================================= -->
-<!-- TOP NAVIGATION                                                             -->
-<!-- ========================================================================= -->
-<nav class="topnav">
-    <a href="/pfe/student/dashboard.php" class="topnav-brand">
-        <i class="bi bi-ticket-perforated-fill text-primary"></i>
-        TicketSystem
-    </a>
-    <div class="topnav-menu d-flex align-items-center gap-1">
-        <a href="/pfe/student/dashboard.php" class="active">
-            <i class="bi bi-grid me-1"></i>Tableau de bord
-        </a>
-        <a href="/pfe/student/my_tickets.php">
-            <i class="bi bi-ticket-detailed me-1"></i>Mes tickets
-        </a>
-        <a href="/pfe/student/create_ticket.php">
-            <i class="bi bi-plus-circle me-1"></i>Nouvelle demande
-        </a>
-        <a href="/pfe/auth/logout.php" style="color:#f87171;">
-            <i class="bi bi-box-arrow-left me-1"></i>Déconnexion
-        </a>
-    </div>
-</nav>
+<?php include __DIR__ . '/includes/sidebar.php'; ?>
 
-<!-- ========================================================================= -->
-<!-- PAGE CONTENT                                                               -->
-<!-- ========================================================================= -->
-<div class="page-wrapper">
-
-    <?php
-    // Flash messages from create/process ticket
-    $flash_success = $_SESSION['flash_success'] ?? null;
-    $flash_error   = $_SESSION['flash_error']   ?? null;
-    unset($_SESSION['flash_success'], $_SESSION['flash_error']);
-    ?>
-    <?php if ($flash_success): ?>
-        <div style="background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:.75rem;font-size:.875rem;">
-            <i class="bi bi-check-circle-fill" style="color:#16a34a;font-size:1.1rem;margin-top:1px;"></i>
-            <div><?= $flash_success ?></div>
-        </div>
-    <?php endif; ?>
-    <?php if ($flash_error): ?>
-        <div style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:.75rem;font-size:.875rem;">
-            <i class="bi bi-exclamation-circle-fill" style="color:#dc2626;font-size:1.1rem;margin-top:1px;"></i>
-            <div><?= $flash_error ?></div>
+<div class="main-content">
+    
+    <?php if ($must_change_password == 1): ?>
+        <div class="alert alert-warning d-flex align-items-center gap-3 border-warning mb-4" style="border-radius: 12px; background: #fffbeb;">
+            <i class="bi bi-shield-lock-fill fs-3 text-warning"></i>
+            <div>
+                <h6 class="mb-1 fw-bold text-dark">Sécurité de votre compte</h6>
+                <p class="mb-0 text-muted" style="font-size: 0.9rem;">
+                    Nous vous recommandons de modifier votre mot de passe par défaut. 
+                    <a href="/pfe/student/profile.php?first_login=1" class="fw-bold text-warning text-decoration-none">Mettre à jour &rarr;</a>
+                </p>
+            </div>
         </div>
     <?php endif; ?>
 
-    <!-- Welcome Banner -->
-    <div class="welcome-banner">
+    <div class="d-flex justify-content-between align-items-end mb-4 flex-wrap gap-3">
         <div>
-            <h4>Bonjour, <?= htmlspecialchars($_SESSION['first_name']) ?> 👋</h4>
-            <p>
-                Bienvenue dans votre espace personnel.
-                Authentification réussie — votre compte est maintenant actif.
-            </p>
+            <h3 class="fw-bold text-dark mb-1">Bonjour, <?= htmlspecialchars($_SESSION['first_name']) ?> 👋</h3>
+            <p class="text-muted mb-0">Bienvenue dans votre espace étudiant.</p>
         </div>
-        <a href="/pfe/student/create_ticket.php" class="btn-new-ticket">
-            <i class="bi bi-plus-lg"></i> Nouvelle demande
-        </a>
-    </div>
-
-    <!-- Mini Stats Row -->
-    <div class="row row-cols-2 row-cols-md-5 g-3 mb-4">
-        <div class="col">
-            <div class="mini-card">
-                <div class="val"><?= $total_my_tickets ?></div>
-                <div class="lbl">Total</div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="mini-card">
-                <div class="val" style="color:#d97706;"><?= $status_counts['new'] ?? 0 ?></div>
-                <div class="lbl">En attente</div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="mini-card">
-                <div class="val" style="color:#6d28d9;"><?= $status_counts['in_progress'] ?? 0 ?></div>
-                <div class="lbl">En cours</div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="mini-card">
-                <div class="val" style="color:#059669;"><?= $status_counts['completed'] ?? 0 ?></div>
-                <div class="lbl">Résolus</div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="mini-card">
-                <div class="val" style="color:#dc2626;"><?= $status_counts['rejected'] ?? 0 ?></div>
-                <div class="lbl">Rejetés</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Tickets List -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="mb-0 fw-semibold" style="color:#1e293b;">
-            <i class="bi bi-ticket-detailed me-2 text-primary"></i>Mes demandes récentes
-        </h6>
-    </div>
-
-    <?php if (empty($my_tickets)): ?>
-        <!-- Empty state -->
-        <div class="text-center py-5" style="background:white;border-radius:14px;">
-            <i class="bi bi-inbox" style="font-size:3rem;color:#cbd5e1;"></i>
-            <p class="mt-3 text-muted">Vous n'avez pas encore soumis de demande.</p>
-            <a href="/pfe/student/create_ticket.php" class="btn-new-ticket">
-                <i class="bi bi-plus-lg"></i> Créer ma première demande
+        <div class="d-flex gap-2">
+            <a href="/pfe/student/create_demande.php" class="btn btn-primary shadow-sm" style="border-radius: 10px;">
+                <i class="bi bi-plus-circle"></i> Demande
+            </a>
+            <a href="/pfe/student/create_reclamation.php" class="btn btn-danger shadow-sm" style="border-radius: 10px;">
+                <i class="bi bi-exclamation-circle"></i> Réclamation
             </a>
         </div>
-    <?php else: ?>
+    </div>
 
-        <?php
-        $status_labels = [
-            'draft'       => 'Brouillon',
-            'new'         => 'En attente',
-            'opened'      => 'Ouvert',
-            'in_progress' => 'En cours',
-            'completed'   => 'Résolu',
-            'rejected'    => 'Rejeté',
-        ];
-        ?>
+    <!-- STATS -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card-custom p-3 text-center h-100">
+                <div class="fs-1 fw-bold text-primary"><?= (int)$stats['total'] ?></div>
+                <div class="text-muted small text-uppercase fw-semibold">Total Tickets</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card-custom p-3 text-center h-100">
+                <div class="fs-1 fw-bold text-info"><?= (int)$stats['demandes'] ?></div>
+                <div class="text-muted small text-uppercase fw-semibold">Demandes</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card-custom p-3 text-center h-100">
+                <div class="fs-1 fw-bold text-danger"><?= (int)$stats['reclamations'] ?></div>
+                <div class="text-muted small text-uppercase fw-semibold">Réclamations</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card-custom p-3 text-center h-100">
+                <div class="fs-1 fw-bold text-secondary"><?= (int)$stats['drafts'] ?></div>
+                <div class="text-muted small text-uppercase fw-semibold">Brouillons</div>
+            </div>
+        </div>
+    </div>
 
-        <?php foreach ($my_tickets as $ticket): ?>
-            <div class="ticket-item">
-                <div>
-                    <div class="ticket-ref mb-1"><?= htmlspecialchars($ticket['reference']) ?></div>
-                    <div class="ticket-subject"><?= htmlspecialchars($ticket['subject']) ?></div>
-                    <div class="ticket-meta mt-1">
-                        <i class="bi bi-tag me-1"></i><?= htmlspecialchars($ticket['category_name']) ?>
-                        &nbsp;·&nbsp;
-                        <i class="bi bi-clock me-1"></i>
-                        <?= date('d/m/Y', strtotime($ticket['created_at'])) ?>
-                    </div>
-                </div>
-                <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                    <span class="status-badge status-<?= htmlspecialchars($ticket['status']) ?>">
-                        <?= $status_labels[$ticket['status']] ?? $ticket['status'] ?>
-                    </span>
-                    <a href="/pfe/student/my_tickets.php" class="btn btn-sm btn-outline-secondary"
-                       style="font-size:0.8rem;border-radius:8px;">
-                        Voir tous <i class="bi bi-arrow-right"></i>
-                    </a>
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card-custom h-100">
+                <div class="card-header-custom">Répartition par Statut</div>
+                <div class="p-4 d-flex justify-content-center">
+                    <canvas id="statusChart" style="max-height: 250px;"></canvas>
                 </div>
             </div>
-        <?php endforeach; ?>
+        </div>
+        <div class="col-md-6">
+            <div class="card-custom h-100">
+                <div class="card-header-custom">Demandes vs Réclamations</div>
+                <div class="p-4 d-flex justify-content-center">
+                    <canvas id="typeChart" style="max-height: 250px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <?php endif; ?>
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card-custom h-100">
+                <div class="card-header-custom">Tickets récemment mis à jour</div>
+                <div class="p-0">
+                    <?php if (empty($recent_tickets)): ?>
+                        <div class="p-4 text-center text-muted">Aucun ticket récent.</div>
+                    <?php else: ?>
+                        <div class="list-group list-group-flush" style="border-radius: 0 0 12px 12px;">
+                            <?php foreach ($recent_tickets as $t): ?>
+                                <?php 
+                                    $labels = ['new'=>'Nouveau', 'opened'=>'Ouvert', 'in_progress'=>'En cours', 'completed'=>'Résolu', 'rejected'=>'Rejeté'];
+                                    $lbl = $labels[$t['status']] ?? $t['status'];
+                                ?>
+                                <a href="/pfe/student/view_ticket.php?id=<?= $t['id'] ?>" class="list-group-item list-group-item-action p-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="fw-bold text-dark font-monospace" style="font-size:0.85rem;"><?= e($t['reference']) ?></span>
+                                        <span class="badge rounded-pill badge-<?= e($t['status']) ?> px-2 py-1"><?= $lbl ?></span>
+                                    </div>
+                                    <div class="text-muted small text-truncate"><?= e($t['subject']) ?></div>
+                                    <div class="text-muted" style="font-size: 0.7rem; margin-top: 4px;"><i class="bi bi-clock"></i> <?= date('d/m/Y H:i', strtotime($t['updated_at'])) ?></div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card-custom h-100">
+                <div class="card-header-custom">Dernières réponses (Admin)</div>
+                <div class="p-0">
+                    <?php if (empty($recent_responses)): ?>
+                        <div class="p-4 text-center text-muted">Aucune réponse récente.</div>
+                    <?php else: ?>
+                        <div class="list-group list-group-flush" style="border-radius: 0 0 12px 12px;">
+                            <?php foreach ($recent_responses as $r): ?>
+                                <a href="/pfe/student/view_ticket.php?id=<?= $r['ticket_id'] ?>" class="list-group-item list-group-item-action p-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="fw-semibold text-primary" style="font-size:0.85rem;"><i class="bi bi-chat-left-dots"></i> <?= e($r['reference']) ?></span>
+                                        <span class="text-muted" style="font-size: 0.7rem;"><?= date('d/m/Y H:i', strtotime($r['created_at'])) ?></span>
+                                    </div>
+                                    <div class="text-muted small text-truncate">
+                                        <?= e(str_starts_with($r['message'], '[SYSTEM]') ? 'Mise à jour du statut' : $r['message']) ?>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
 
-</div><!-- /page-wrapper -->
+</div>
 
+<script>
+const statusCtx = document.getElementById('statusChart').getContext('2d');
+new Chart(statusCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['Nouveau', 'Ouvert', 'En cours', 'Complété', 'Rejeté', 'Brouillon'],
+        datasets: [{
+            data: [
+                <?= (int)$stats['new'] ?>, 
+                <?= (int)$stats['opened'] ?>, 
+                <?= (int)$stats['in_progress'] ?>, 
+                <?= (int)$stats['completed'] ?>, 
+                <?= (int)$stats['rejected'] ?>, 
+                <?= (int)$stats['drafts'] ?>
+            ],
+            backgroundColor: ['#3b82f6', '#06b6d4', '#f97316', '#22c55e', '#ef4444', '#cbd5e1']
+        }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+});
+
+const typeCtx = document.getElementById('typeChart').getContext('2d');
+new Chart(typeCtx, {
+    type: 'pie',
+    data: {
+        labels: ['Demandes', 'Réclamations'],
+        datasets: [{
+            data: [<?= (int)$stats['demandes'] ?>, <?= (int)$stats['reclamations'] ?>],
+            backgroundColor: ['#3b82f6', '#ef4444']
+        }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+</script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

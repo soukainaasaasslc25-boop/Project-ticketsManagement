@@ -59,8 +59,8 @@ $allowed_priorities = ['low', 'medium', 'high', 'urgent'];
 // ---------------------------------------------------------------------------
 $errors = [];
 
-if ($category_id <= 0) {
-    $errors[] = 'Veuillez sélectionner une catégorie.';
+if ($subcategory_id <= 0) {
+    $errors[] = 'Veuillez sélectionner une sous-catégorie.';
 }
 
 if (mb_strlen($subject) < 5) {
@@ -77,37 +77,36 @@ if ($action === 'submit') {
     }
 }
 
-// Verify category exists and is active → get its type
-$category = null;
-if ($category_id > 0) {
-    $stmt = $pdo->prepare('SELECT id, type FROM categories WHERE id = ? AND is_active = 1 LIMIT 1');
-    $stmt->execute([$category_id]);
-    $category = $stmt->fetch();
-    if (!$category) {
-        $errors[] = 'La catégorie sélectionnée est introuvable ou désactivée.';
-    }
-}
-
-// Verify subcategory belongs to that category (if one was chosen)
+// Infer category_id from subcategory_id
 $verified_subcategory_id = null;
-if ($subcategory_id > 0 && $category && empty($errors)) {
+$category = null;
+if ($subcategory_id > 0 && empty($errors)) {
     $stmt = $pdo->prepare('
-        SELECT id FROM subcategories
-        WHERE id = ? AND category_id = ? AND is_active = 1
+        SELECT s.id, s.category_id, c.type 
+        FROM subcategories s
+        JOIN categories c ON c.id = s.category_id
+        WHERE s.id = ? AND s.is_active = 1 AND c.is_active = 1
         LIMIT 1
     ');
-    $stmt->execute([$subcategory_id, $category_id]);
-    if ($stmt->fetch()) {
-        $verified_subcategory_id = $subcategory_id;
+    $stmt->execute([$subcategory_id]);
+    $sub = $stmt->fetch();
+    
+    if ($sub) {
+        $verified_subcategory_id = $sub['id'];
+        $category_id = $sub['category_id'];
+        $category = ['type' => $sub['type']];
+    } else {
+        $errors[] = 'La sous-catégorie sélectionnée est introuvable ou désactivée.';
     }
-    // If not found, we simply ignore the subcategory (don't error out)
 }
 
 // On validation failure → redirect back with errors and old values
 if (!empty($errors)) {
     $_SESSION['flash_error']     = implode('<br>', $errors);
     $_SESSION['form_repopulate'] = $_POST;
-    redirect('/student/create_ticket.php');
+    // Redirect back to the correct form
+    $redirect_url = ($_POST['form_type'] ?? '') === 'complaint' ? '/student/create_reclamation.php' : '/student/create_demande.php';
+    redirect($redirect_url);
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +288,8 @@ try {
 } catch (PDOException $e) {
     $pdo->rollBack();
     $_SESSION['flash_error'] = 'Erreur base de données. Veuillez réessayer.';
-    redirect('/student/create_ticket.php');
+    $redirect_url = ($_POST['form_type'] ?? '') === 'complaint' ? '/student/create_reclamation.php' : '/student/create_demande.php';
+    redirect($redirect_url);
 }
 
 // ---------------------------------------------------------------------------
