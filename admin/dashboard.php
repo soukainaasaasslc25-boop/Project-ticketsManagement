@@ -1,409 +1,338 @@
 <?php
-// =============================================================================
-// FILE    : admin/dashboard.php
-// PURPOSE : Admin dashboard — placeholder page protected by require_admin().
-//           Shows basic statistics and confirms authentication is working.
-// =============================================================================
-
-// Protect this page: only admins can access it
-// auth_check.php provides require_admin(), require_student(), require_login()
 require_once __DIR__ . '/../auth/auth_check.php';
 require_admin();
-
-// Load the database connection for stats queries
 require_once __DIR__ . '/../config/database.php';
 
-// =============================================================================
-// Fetch quick statistics to display on dashboard
-// =============================================================================
-
-// Total tickets
-$stmt = $pdo->query('SELECT COUNT(*) FROM tickets');
-$total_tickets = $stmt->fetchColumn();
-
-// Tickets by status
-$stmt = $pdo->query("SELECT status, COUNT(*) AS cnt FROM tickets GROUP BY status");
+// Stats queries
+$stmt = $pdo->query("SELECT status, COUNT(*) AS cnt FROM tickets WHERE status != 'draft' GROUP BY status");
 $tickets_by_status = [];
+$total_tickets = 0;
 foreach ($stmt->fetchAll() as $row) {
-    $tickets_by_status[$row['status']] = $row['cnt'];
+    $tickets_by_status[$row['status']] = (int)$row['cnt'];
+    $total_tickets += (int)$row['cnt'];
+}
+$new_count = $tickets_by_status['new'] ?? 0;
+$opened_count = $tickets_by_status['opened'] ?? 0;
+$in_progress_count = $tickets_by_status['in_progress'] ?? 0;
+$completed_count = $tickets_by_status['completed'] ?? 0;
+$rejected_count = $tickets_by_status['rejected'] ?? 0;
+
+// Type chart data
+$stmt = $pdo->query("SELECT type, COUNT(*) as count FROM tickets WHERE status != 'draft' GROUP BY type");
+$type_data = $stmt->fetchAll();
+$type_counts = ['request' => 0, 'complaint' => 0];
+foreach ($type_data as $row) {
+    $type_counts[$row['type']] = (int)$row['count'];
 }
 
-// Total students
-$stmt = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'student'");
-$total_students = $stmt->fetchColumn();
+// Category chart data
+$stmt = $pdo->query("SELECT c.name, COUNT(*) as count FROM tickets t JOIN categories c ON c.id = t.category_id WHERE t.status != 'draft' GROUP BY c.name");
+$cat_data = $stmt->fetchAll();
+$cat_labels = json_encode(array_column($cat_data, 'name'));
+$cat_counts = json_encode(array_column($cat_data, 'count'));
 
-// New (unhandled) tickets — need attention
-$new_count        = $tickets_by_status['new'] ?? 0;
-$in_progress_count = $tickets_by_status['in_progress'] ?? 0;
+// Monthly activity data
+$stmt = $pdo->query("SELECT DATE_FORMAT(created_at, '%b %Y') as month, COUNT(*) as count FROM tickets WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) AND status != 'draft' GROUP BY DATE_FORMAT(created_at, '%Y-%m'), DATE_FORMAT(created_at, '%b %Y') ORDER BY DATE_FORMAT(created_at, '%Y-%m') ASC");
+$monthly_data = $stmt->fetchAll();
+$monthly_labels = json_encode(array_column($monthly_data, 'month'));
+$monthly_counts = json_encode(array_column($monthly_data, 'count'));
 
-// Recent 5 tickets for the quick view table
+// Most Active Students
+$stmt = $pdo->query("SELECT u.first_name, u.last_name, COUNT(t.id) as ticket_count FROM users u JOIN tickets t ON u.id = t.user_id WHERE u.role = 'student' AND t.status != 'draft' GROUP BY u.id ORDER BY ticket_count DESC LIMIT 5");
+$active_students = $stmt->fetchAll();
+
+// Recent tickets
 $stmt = $pdo->query("
-    SELECT t.id, t.reference, t.status, t.priority, t.subject,
-           t.created_at, t.submitted_at,
-           u.first_name, u.last_name
+    SELECT t.id, t.reference, t.status, t.priority, t.subject, t.type,
+           t.updated_at, u.first_name, u.last_name
     FROM tickets t
     JOIN users u ON u.id = t.user_id
     WHERE t.status != 'draft'
     ORDER BY t.updated_at DESC
-    LIMIT 6
+    LIMIT 5
 ");
 $recent_tickets = $stmt->fetchAll();
 
-// Flash messages
 $flash_success = $_SESSION['flash_success'] ?? null;
-$flash_error   = $_SESSION['flash_error']   ?? null;
-unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+unset($_SESSION['flash_success']);
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Admin — Système de Tickets</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <title>Dashboard — UniPortal Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
-        .sidebar {
-            background: #0f172a;
-            min-height: 100vh;
-            width: 250px;
-            position: fixed;
-            top: 0; left: 0;
-            padding: 1.5rem 0;
-            z-index: 100;
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: { brand: { 50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5' } }
+                }
+            }
         }
-        .sidebar-brand {
-            padding: 0 1.5rem 1.5rem;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
-            margin-bottom: 1rem;
-        }
-        .sidebar-brand h5 {
-            color: white; font-weight: 700; font-size: 1rem; margin: 0;
-        }
-        .sidebar-brand p { color: #64748b; font-size: 0.75rem; margin: 0; }
-        .nav-link-sidebar {
-            display: flex; align-items: center; gap: 0.75rem;
-            padding: 0.65rem 1.5rem; color: #94a3b8;
-            text-decoration: none; font-size: 0.88rem; font-weight: 500;
-            border-radius: 0; transition: all 0.2s;
-        }
-        .nav-link-sidebar:hover, .nav-link-sidebar.active {
-            background: rgba(59,130,246,0.12); color: #60a5fa;
-        }
-        .topnav-menu a:hover, .topnav-menu a.active {
-            background: rgba(59,130,246,0.12); color: #60a5fa;
-        }
-        .main-content { margin-left: 250px; padding: 2rem; }
-        .topbar {
-            background: white; border-bottom: 1px solid #e2e8f0;
-            padding: 1rem 2rem;
-            margin-left: 250px; position: sticky; top: 0; z-index: 99;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .stat-card {
-            background: white; border-radius: 14px;
-            padding: 1.5rem; border: 1px solid #f1f5f9;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .stat-card:hover {
-            transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-        .stat-icon {
-            width: 52px; height: 52px; border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.4rem; margin-bottom: 1rem;
-        }
-        .stat-value { font-size: 2rem; font-weight: 700; color: #1e293b; line-height: 1; }
-        .stat-label { font-size: 0.82rem; color: #64748b; margin-top: 0.3rem; }
-        .badge-status { font-size: 0.75rem; padding: 0.3em 0.7em; border-radius: 6px; }
-    </style>
+    </script>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-500 selection:text-white">
 
-<!-- ========================================================================= -->
-<!-- SIDEBAR                                                                    -->
-<!-- ========================================================================= -->
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <div class="d-flex align-items-center gap-2 mb-2">
-            <i class="bi bi-ticket-perforated-fill text-primary fs-5"></i>
-            <h5>TicketSystem</h5>
-        </div>
-        <p>Administration</p>
-    </div>
+<?php include __DIR__ . '/includes/sidebar.php'; ?>
 
-    <nav>
-        <a href="/pfe/admin/dashboard.php" class="nav-link-sidebar active">
-            <i class="bi bi-grid-1x2"></i> Dashboard
-        </a>
-        <a href="/pfe/admin/tickets/index.php" class="nav-link-sidebar">
-            <i class="bi bi-ticket-detailed"></i> Tous les tickets
-            <?php if ($new_count > 0): ?>
-                <span class="ms-auto badge bg-danger rounded-pill" style="font-size:0.68rem;"><?= $new_count ?></span>
-            <?php endif; ?>
-        </a>
-        <a href="/pfe/admin/tickets/index.php?status=new" class="nav-link-sidebar">
-            <i class="bi bi-clock"></i> Nouveaux
-        </a>
-        <a href="/pfe/admin/tickets/index.php?status=in_progress" class="nav-link-sidebar">
-            <i class="bi bi-arrow-repeat"></i> En cours
-        </a>
-        <hr style="border-color:rgba(255,255,255,0.08); margin: 0.75rem 1.5rem;">
-        <a href="/pfe/admin/students/index.php" class="nav-link-sidebar">
-            <i class="bi bi-people"></i> Étudiants
-        </a>
-        <a href="/pfe/auth/logout.php" class="nav-link-sidebar" style="color:#f87171;">
-            <i class="bi bi-box-arrow-left"></i> Déconnexion
-        </a>
-    </nav>
-</div>
-
-<!-- ========================================================================= -->
-<!-- TOP BAR                                                                    -->
-<!-- ========================================================================= -->
-<div class="topbar">
+<!-- Content Header -->
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
     <div>
-        <h6 class="mb-0 fw-600" style="font-weight:600; color:#1e293b;">
-            Tableau de bord
-        </h6>
-        <small class="text-muted">
-            <?= date('l, d F Y') ?>
-        </small>
+        <h1 class="text-2xl font-bold text-slate-900">Dashboard Overview</h1>
+        <p class="text-slate-500 text-sm mt-1">Platform statistics and recent activity.</p>
     </div>
-    <div class="d-flex align-items-center gap-3">
-        <?php if ($new_count > 0): ?>
-            <span class="badge bg-danger rounded-pill">
-                <?= $new_count ?> nouveau<?= $new_count > 1 ? 'x' : '' ?>
-            </span>
-        <?php endif; ?>
-        <div class="d-flex align-items-center gap-2">
-            <div style="width:36px;height:36px;background:#1e40af;border-radius:50%;
-                        display:flex;align-items:center;justify-content:center;color:white;font-size:0.9rem;font-weight:700;">
-                <?= strtoupper(substr($_SESSION['first_name'], 0, 1)) ?>
-            </div>
-            <div>
-                <div style="font-size:0.85rem;font-weight:600;color:#1e293b;">
-                    <?= htmlspecialchars($_SESSION['first_name'] . ' ' . $_SESSION['last_name']) ?>
-                </div>
-                <div style="font-size:0.75rem;color:#64748b;">Administrateur</div>
-            </div>
-        </div>
+    <div class="flex gap-3">
+        <a href="/pfe/admin/tickets/index.php" class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+            View All Tickets
+        </a>
     </div>
 </div>
 
-<!-- ========================================================================= -->
-<!-- MAIN CONTENT                                                               -->
-<!-- ========================================================================= -->
-<div class="main-content">
+<?php if ($flash_success): ?>
+    <div class="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl p-4 mb-6 flex items-start gap-3">
+        <i class="bi bi-check-circle-fill text-emerald-500 text-xl shrink-0 mt-0.5"></i>
+        <div class="text-sm font-medium"><?= $flash_success ?></div>
+    </div>
+<?php endif; ?>
 
-    <!-- Flash messages -->
-    <?php if ($flash_success): ?>
-        <div class="alert border-0 mb-4" style="background:#f0fdf4;border-radius:14px;color:#15803d;">
-            <div class="d-flex align-items-center gap-2">
-                <i class="bi bi-check-circle-fill"></i>
-                <div><?= $flash_success ?></div>
-            </div>
+<!-- ===== Stats Grid: 6 status summary cards ===== -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+    <?php
+    // Each item: [label, value, icon class, icon background + color]
+    $stats_cards = [
+        ['Total Tickets', $total_tickets,    'bi-collection',   'bg-indigo-50 text-indigo-600'],
+        ['New',           $new_count,         'bi-clock',        'bg-blue-50 text-blue-600'],
+        ['Opened',        $opened_count,      'bi-folder2-open', 'bg-purple-50 text-purple-600'],
+        ['In Progress',   $in_progress_count, 'bi-arrow-repeat', 'bg-amber-50 text-amber-600'],
+        ['Completed',     $completed_count,   'bi-check-circle', 'bg-emerald-50 text-emerald-600'],
+        ['Rejected',      $rejected_count,    'bi-x-circle',     'bg-rose-50 text-rose-600'],
+    ];
+    foreach ($stats_cards as [$label, $val, $icon, $bg]):
+    ?>
+    <!-- Single stat card (same style as Student Dashboard) -->
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl <?= $bg ?> flex items-center justify-center text-lg shrink-0">
+            <i class="bi <?= $icon ?>"></i>
         </div>
-    <?php endif; ?>
-    <?php if ($flash_error): ?>
-        <div class="alert border-0 mb-4" style="background:#fef2f2;border-radius:14px;color:#dc2626;">
-            <div class="d-flex align-items-center gap-2">
-                <i class="bi bi-exclamation-circle-fill"></i>
-                <div><?= $flash_error ?></div>
-            </div>
-        </div>
-    <?php endif; ?>
-
-    <!-- Welcome Banner -->
-    <div class="alert alert-success border-0 mb-4"
-         style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);border-radius:14px;">
-        <div class="d-flex align-items-center gap-3">
-            <i class="bi bi-check-circle-fill text-success fs-4"></i>
-            <div>
-                <strong>Authentification réussie !</strong>
-                Bienvenue <?= htmlspecialchars($_SESSION['first_name']) ?>.
-                Le système d'authentification fonctionne correctement.
-            </div>
+        <div>
+            <p class="text-xs font-medium text-slate-500"><?= $label ?></p>
+            <h3 class="text-xl font-bold text-slate-800"><?= $val ?></h3>
         </div>
     </div>
+    <?php endforeach; ?>
+</div>
 
-    <!-- Statistics Row -->
-    <div class="row g-3 mb-4">
+<!-- ===== Main Dashboard: Two-column layout (left 3/5, right 2/5) ===== -->
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
 
-        <div class="col-12 col-sm-6 col-xl-3">
-            <div class="stat-card">
-                <div class="stat-icon" style="background:#eff6ff;color:#3b82f6;">
-                    <i class="bi bi-ticket-detailed-fill"></i>
+    <!-- ===== LEFT COLUMN: Recent Tickets + Most Used Categories ===== -->
+    <div class="lg:col-span-3 flex flex-col gap-6">
+
+        <!-- CARD: Recent Tickets (most important card on the page) -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+
+            <!-- Card header -->
+            <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800">Recent Tickets</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Latest submitted tickets</p>
                 </div>
-                <div class="stat-value"><?= $total_tickets ?></div>
-                <div class="stat-label">Total tickets</div>
+                <a href="/pfe/admin/tickets/index.php"
+                   class="text-sm font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors">
+                    View all <i class="bi bi-arrow-right"></i>
+                </a>
             </div>
-        </div>
 
-        <div class="col-12 col-sm-6 col-xl-3">
-            <div class="stat-card">
-                <div class="stat-icon" style="background:#fff7ed;color:#f97316;">
-                    <i class="bi bi-clock-fill"></i>
-                </div>
-                <div class="stat-value"><?= $new_count ?></div>
-                <div class="stat-label">Nouveaux tickets</div>
-            </div>
-        </div>
-
-        <div class="col-12 col-sm-6 col-xl-3">
-            <div class="stat-card">
-                <div class="stat-icon" style="background:#f0fdf4;color:#22c55e;">
-                    <i class="bi bi-check-circle-fill"></i>
-                </div>
-                <div class="stat-value"><?= $tickets_by_status['completed'] ?? 0 ?></div>
-                <div class="stat-label">Tickets résolus</div>
-            </div>
-        </div>
-
-        <div class="col-12 col-sm-6 col-xl-3">
-            <div class="stat-card">
-                <div class="stat-icon" style="background:#f5f3ff;color:#8b5cf6;">
-                    <i class="bi bi-people-fill"></i>
-                </div>
-                <div class="stat-value"><?= $total_students ?></div>
-                <div class="stat-label">Étudiants</div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Tickets by Status Table -->
-    <div class="card border-0 shadow-sm" style="border-radius:14px;overflow:hidden;">
-        <div class="card-header bg-white border-bottom py-3 px-4">
-            <h6 class="mb-0 fw-semibold">Répartition des tickets par statut</h6>
-        </div>
-        <div class="card-body p-0">
-            <table class="table table-hover mb-0">
-                <thead style="background:#f8fafc;">
-                    <tr>
-                        <th class="px-4 py-3 text-muted" style="font-size:0.8rem;font-weight:600;">STATUT</th>
-                        <th class="px-4 py-3 text-muted" style="font-size:0.8rem;font-weight:600;">NOMBRE</th>
-                        <th class="px-4 py-3 text-muted" style="font-size:0.8rem;font-weight:600;">ACTION</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php
-                    $status_config = [
-                        'new'         => ['label' => 'Nouveaux',     'badge' => 'warning', 'icon' => 'bi-envelope-fill'],
-                        'opened'      => ['label' => 'Ouverts',      'badge' => 'info',    'icon' => 'bi-folder2-open'],
-                        'in_progress' => ['label' => 'En cours',     'badge' => 'primary', 'icon' => 'bi-arrow-repeat'],
-                        'completed'   => ['label' => 'Terminés',     'badge' => 'success', 'icon' => 'bi-check-circle'],
-                        'rejected'    => ['label' => 'Rejetés',      'badge' => 'danger',  'icon' => 'bi-x-circle'],
-                        'draft'       => ['label' => 'Brouillons',   'badge' => 'secondary','icon' => 'bi-pencil'],
-                    ];
-                    foreach ($status_config as $status => $cfg):
-                        $count = $tickets_by_status[$status] ?? 0;
-                    ?>
-                    <tr>
-                        <td class="px-4 py-3">
-                            <i class="bi <?= $cfg['icon'] ?> me-2 text-<?= $cfg['badge'] ?>"></i>
-                            <?= $cfg['label'] ?>
-                        </td>
-                        <td class="px-4 py-3">
-                            <span class="badge bg-<?= $cfg['badge'] ?> badge-status">
-                                <?= $count ?>
-                            </span>
-                        </td>
-                        <td class="px-4 py-3">
-                            <a href="/pfe/admin/tickets/index.php?status=<?= $status ?>" class="btn btn-sm btn-outline-secondary" style="font-size:0.8rem;">
-                                Voir <i class="bi bi-arrow-right"></i>
-                            </a>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Recent Tickets Table -->
-    <div class="card border-0 shadow-sm mt-4" style="border-radius:14px;overflow:hidden;">
-        <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
-            <h6 class="mb-0 fw-semibold">Tickets récents</h6>
-            <a href="/pfe/admin/tickets/index.php" class="btn btn-sm btn-primary" style="font-size:0.8rem;border-radius:8px;">
-                Voir tous <i class="bi bi-arrow-right ms-1"></i>
-            </a>
-        </div>
-        <div class="card-body p-0">
+            <!-- Ticket rows -->
             <?php if (empty($recent_tickets)): ?>
-                <div class="text-center py-5 text-muted">
-                    <i class="bi bi-inbox fs-2 d-block mb-2 opacity-25"></i>
-                    Aucun ticket soumis pour l'instant.
+                <div class="flex flex-col items-center justify-center py-12 text-center">
+                    <div class="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                        <i class="bi bi-inbox text-xl text-slate-400"></i>
+                    </div>
+                    <p class="text-sm text-slate-500">No tickets yet</p>
                 </div>
             <?php else: ?>
                 <?php
-                $sts_colors = [
-                    'new'         => ['Nouveau',    'warning'],
-                    'opened'      => ['Ouvert',     'info'],
-                    'in_progress' => ['En cours',   'primary'],
-                    'completed'   => ['Résolu',     'success'],
-                    'rejected'    => ['Rejeté',     'danger'],
+                // Badge colors and labels per status
+                $badge_colors = [
+                    'new'         => 'bg-blue-100 text-blue-700',
+                    'opened'      => 'bg-purple-100 text-purple-700',
+                    'in_progress' => 'bg-amber-100 text-amber-700',
+                    'completed'   => 'bg-emerald-100 text-emerald-700',
+                    'rejected'    => 'bg-rose-100 text-rose-700',
                 ];
-                $pri_labels = [
-                    'low'    => ['Basse',   'secondary'],
-                    'medium' => ['Moyenne', 'warning'],
-                    'high'   => ['Haute',   'orange'],
-                    'urgent' => ['Urgente', 'danger'],
+                $badge_labels = [
+                    'new'         => 'New',
+                    'opened'      => 'Opened',
+                    'in_progress' => 'In Progress',
+                    'completed'   => 'Completed',
+                    'rejected'    => 'Rejected',
                 ];
                 ?>
-                <table class="table table-hover mb-0" style="font-size:0.875rem;">
-                    <thead style="background:#f8fafc;">
-                        <tr>
-                            <th class="px-4 py-3 text-muted" style="font-size:0.78rem;font-weight:600;">RÉFÉRENCE</th>
-                            <th class="px-4 py-3 text-muted" style="font-size:0.78rem;font-weight:600;">ÉTUDIANT</th>
-                            <th class="px-4 py-3 text-muted" style="font-size:0.78rem;font-weight:600;">OBJET</th>
-                            <th class="px-4 py-3 text-muted" style="font-size:0.78rem;font-weight:600;">PRIORITÉ</th>
-                            <th class="px-4 py-3 text-muted" style="font-size:0.78rem;font-weight:600;">STATUT</th>
-                            <th class="px-4 py-3 text-muted" style="font-size:0.78rem;font-weight:600;">ACTION</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($recent_tickets as $t): ?>
-                            <?php
-                            [$sts_label, $sts_badge] = $sts_colors[$t['status']]   ?? [$t['status'], 'secondary'];
-                            [$pri_label, $pri_badge] = $pri_labels[$t['priority']] ?? [$t['priority'], 'secondary'];
-                            ?>
-                            <tr>
-                                <td class="px-4 py-3">
-                                    <code class="text-primary" style="font-size:0.8rem;"><?= htmlspecialchars($t['reference']) ?></code>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <?= htmlspecialchars($t['first_name'] . ' ' . $t['last_name']) ?>
-                                </td>
-                                <td class="px-4 py-3" style="max-width:220px;">
-                                    <span class="d-block text-truncate"><?= htmlspecialchars($t['subject']) ?></span>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <span class="badge bg-<?= $pri_badge ?> badge-status"><?= $pri_label ?></span>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <span class="badge bg-<?= $sts_badge ?> badge-status"><?= $sts_label ?></span>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <a href="/pfe/admin/tickets/view.php?id=<?= (int)$t['id'] ?>"
-                                       class="btn btn-sm btn-outline-primary" style="font-size:0.78rem;border-radius:8px;">
-                                        <i class="bi bi-eye me-1"></i>Voir
-                                    </a>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                <ul class="divide-y divide-slate-100">
+                    <?php foreach ($recent_tickets as $ticket): ?>
+                        <?php
+                            $b_color      = $badge_colors[$ticket['status']] ?? 'bg-slate-100 text-slate-600';
+                            $b_label      = $badge_labels[$ticket['status']] ?? ucfirst($ticket['status']);
+                            $is_complaint = $ticket['type'] === 'complaint';
+                        ?>
+                        <li class="group hover:bg-slate-50 transition-colors duration-150">
+                            <a href="/pfe/admin/tickets/view.php?id=<?= $ticket['id'] ?>"
+                               class="flex items-center px-6 py-4 gap-4">
+
+                                <!-- Type icon (complaint = rose, request = indigo) -->
+                                <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 <?= $is_complaint ? 'bg-rose-50 text-rose-500' : 'bg-indigo-50 text-indigo-500' ?>">
+                                    <i class="bi <?= $is_complaint ? 'bi-exclamation-triangle' : 'bi-file-earmark-text' ?> text-sm"></i>
+                                </div>
+
+                                <!-- Subject + reference + student name -->
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-semibold text-slate-800 truncate"><?= e($ticket['subject']) ?></p>
+                                    <p class="text-xs text-slate-400 mt-0.5 truncate">
+                                        <?= e($ticket['reference']) ?> &middot; <?= e($ticket['first_name'] . ' ' . $ticket['last_name']) ?>
+                                    </p>
+                                </div>
+
+                                <!-- Status badge + date + chevron -->
+                                <div class="flex items-center gap-3 shrink-0">
+                                    <div class="hidden sm:flex flex-col items-end gap-1">
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <?= $b_color ?>">
+                                            <?= $b_label ?>
+                                        </span>
+                                        <span class="text-xs text-slate-400"><?= date('M d', strtotime($ticket['updated_at'])) ?></span>
+                                    </div>
+                                    <i class="bi bi-chevron-right text-slate-300 text-xs group-hover:text-slate-500 transition-colors"></i>
+                                </div>
+
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
             <?php endif; ?>
+
         </div>
+
+        <!-- CARD: Most Used Categories with progress bars -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-4">Most Used Categories</p>
+
+            <?php if (empty($cat_data)): ?>
+                <p class="text-sm text-slate-500 text-center py-6">No category data yet.</p>
+            <?php else: ?>
+                <?php
+                // Find the highest ticket count to scale progress bars
+                $max_cat = max(array_column($cat_data, 'count'));
+                ?>
+                <div class="flex flex-col gap-4">
+                    <?php foreach ($cat_data as $cat): ?>
+                        <?php
+                            // Percentage relative to the most-used category
+                            $pct = $max_cat > 0 ? round(($cat['count'] / $max_cat) * 100) : 0;
+                        ?>
+                        <div>
+                            <!-- Category name and count -->
+                            <div class="flex justify-between items-center mb-1.5">
+                                <span class="text-sm font-medium text-slate-700 truncate"><?= e($cat['name']) ?></span>
+                                <span class="text-xs font-bold text-slate-500 ml-2 shrink-0"><?= $cat['count'] ?></span>
+                            </div>
+                            <!-- Progress bar -->
+                            <div class="w-full bg-slate-100 rounded-full h-1.5">
+                                <div class="bg-indigo-500 h-1.5 rounded-full" style="width: <?= $pct ?>%"></div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+        </div>
+
     </div>
 
-</div><!-- /main-content -->
+    <!-- ===== RIGHT COLUMN: Most Active Students + Status Overview ===== -->
+    <div class="lg:col-span-2 flex flex-col gap-6">
 
+        <!-- CARD: Most Active Students -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-4">Most Active Students</p>
+
+            <?php if (empty($active_students)): ?>
+                <p class="text-sm text-slate-500 text-center py-6">No student activity yet.</p>
+            <?php else: ?>
+                <div class="flex flex-col gap-3">
+                    <?php foreach ($active_students as $student): ?>
+                        <div class="flex items-center justify-between">
+
+                            <!-- Avatar initials + full name -->
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
+                                    <?= mb_strtoupper(mb_substr($student['first_name'], 0, 1) . mb_substr($student['last_name'], 0, 1)) ?>
+                                </div>
+                                <span class="text-sm font-medium text-slate-700 truncate">
+                                    <?= e($student['first_name'] . ' ' . $student['last_name']) ?>
+                                </span>
+                            </div>
+
+                            <!-- Ticket count pill -->
+                            <span class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full shrink-0">
+                                <?= $student['ticket_count'] ?>
+                            </span>
+
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+        </div>
+
+        <!-- CARD: Ticket Status Overview table -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-4">Status Overview</p>
+
+            <?php
+            // Each row: [display label, count variable, badge color classes]
+            $status_rows = [
+                ['New',         $new_count,         'bg-blue-100 text-blue-700'],
+                ['Opened',      $opened_count,       'bg-purple-100 text-purple-700'],
+                ['In Progress', $in_progress_count,  'bg-amber-100 text-amber-700'],
+                ['Completed',   $completed_count,    'bg-emerald-100 text-emerald-700'],
+                ['Rejected',    $rejected_count,     'bg-rose-100 text-rose-700'],
+            ];
+            ?>
+            <div class="flex flex-col">
+                <?php foreach ($status_rows as [$label, $count, $badge_class]): ?>
+                    <div class="flex items-center justify-between py-2.5 border-b border-slate-100">
+                        <!-- Colored status badge -->
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <?= $badge_class ?>">
+                            <?= $label ?>
+                        </span>
+                        <!-- Count number -->
+                        <span class="text-sm font-bold text-slate-800"><?= $count ?></span>
+                    </div>
+                <?php endforeach; ?>
+
+                <!-- Total row at the bottom -->
+                <div class="flex items-center justify-between pt-3">
+                    <span class="text-sm font-semibold text-slate-500">Total</span>
+                    <span class="text-sm font-bold text-slate-800"><?= $total_tickets ?></span>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+        </main> <!-- /main from sidebar.php -->
+    </div> <!-- /content wrapper from sidebar.php -->
+</div> <!-- /layout flex from sidebar.php -->
 </body>
 </html>

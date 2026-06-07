@@ -1,44 +1,23 @@
 <?php
-// =============================================================================
-// FILE    : admin/tickets/view.php
-// PURPOSE : Detailed view of a single ticket for admin.
-//           Sections:
-//           1. Ticket info (subject, category, priority, status)
-//           2. Student info (name, group, filière)
-//           3. Assignment panel
-//           4. Conversation thread (public replies + internal notes + system msgs)
-//           5. Unified update form (reply + status + rejection reason)
-// HOW TO TEST:
-//   1. Go to /pfe/admin/tickets/index.php → click "Voir" on any ticket
-//   2. Type a reply, select a new status, submit → updates both
-//   3. Auto-transition: first reply on 'new' auto-changes to 'opened'
-//   4. View system messages injected when status changes
-// =============================================================================
-
 require_once __DIR__ . '/../../auth/auth_check.php';
 require_admin();
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
-function format_date_fr($date_str) {
+function format_date_en($date_str) {
     if (!$date_str) return '';
-    $months = ['Jan'=>'janv.', 'Feb'=>'févr.', 'Mar'=>'mars', 'Apr'=>'avr.', 'May'=>'mai', 'Jun'=>'juin', 'Jul'=>'juil.', 'Aug'=>'août', 'Sep'=>'sept.', 'Oct'=>'oct.', 'Nov'=>'nov.', 'Dec'=>'déc.'];
-    $dt = date('d M Y à H:i', strtotime($date_str));
-    return strtr($dt, $months);
+    return date('M d, Y h:i A', strtotime($date_str));
 }
 
 $admin_id  = (int) $_SESSION['user_id'];
 $ticket_id = (int) ($_GET['id'] ?? 0);
 
 if ($ticket_id <= 0) {
-    $_SESSION['flash_error'] = 'Identifiant de ticket invalide.';
+    $_SESSION['flash_error'] = 'Invalid ticket ID.';
     redirect('/admin/tickets/index.php');
 }
 
-// ---------------------------------------------------------------------------
-// Load ticket with all joins
-// ---------------------------------------------------------------------------
 $stmt = $pdo->prepare("
     SELECT
         t.*,
@@ -59,20 +38,17 @@ $stmt->execute([':id' => $ticket_id]);
 $ticket = $stmt->fetch();
 
 if (!$ticket) {
-    $_SESSION['flash_error'] = 'Ticket introuvable.';
+    $_SESSION['flash_error'] = 'Ticket not found.';
     redirect('/admin/tickets/index.php');
 }
 
 if ($ticket['status'] === 'draft') {
-    $_SESSION['flash_error'] = 'Ce ticket est un brouillon. Accès refusé.';
+    $_SESSION['flash_error'] = 'This ticket is a draft. Access denied.';
     redirect('/admin/tickets/index.php');
 }
 
 $is_closed = in_array($ticket['status'], ['completed', 'rejected'], true);
 
-// ---------------------------------------------------------------------------
-// Load conversation thread (admin sees ALL: public + internal)
-// ---------------------------------------------------------------------------
 $stmt = $pdo->prepare("
     SELECT r.*, u.first_name, u.last_name, u.role
     FROM ticket_responses r
@@ -83,9 +59,6 @@ $stmt = $pdo->prepare("
 $stmt->execute([':tid' => $ticket_id]);
 $responses = $stmt->fetchAll();
 
-// ---------------------------------------------------------------------------
-// Load attachments
-// ---------------------------------------------------------------------------
 $stmt = $pdo->prepare("
     SELECT * FROM ticket_attachments
     WHERE ticket_id = :tid AND response_id IS NULL
@@ -94,9 +67,6 @@ $stmt = $pdo->prepare("
 $stmt->execute([':tid' => $ticket_id]);
 $attachments = $stmt->fetchAll();
 
-// ---------------------------------------------------------------------------
-// Load all admins for the assign dropdown
-// ---------------------------------------------------------------------------
 $admins = $pdo->query("SELECT id, first_name, last_name FROM users WHERE role = 'admin' ORDER BY first_name")->fetchAll();
 
 if (empty($_SESSION['csrf_token'])) {
@@ -108,184 +78,196 @@ $flash_success = $_SESSION['flash_success'] ?? null;
 $flash_error   = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-// Badge helpers
 $sts_cfg = [
-    'draft'       => ['Brouillon',  'bg-slate-100 text-slate-600'],
-    'new'         => ['Nouveau',    'bg-blue-100 text-blue-700'],
-    'opened'      => ['Ouvert',     'bg-cyan-100 text-cyan-700'],
-    'in_progress' => ['En cours',   'bg-orange-100 text-orange-700'],
-    'completed'   => ['Résolu',     'bg-green-100 text-green-700'],
-    'rejected'    => ['Rejeté',     'bg-red-100 text-red-700'],
+    'new'         => ['New',    'bg-amber-100 text-amber-700 border-amber-200'],
+    'opened'      => ['Opened',     'bg-purple-100 text-purple-700 border-purple-200'],
+    'in_progress' => ['In Progress',   'bg-blue-100 text-blue-700 border-blue-200'],
+    'completed'   => ['Completed',     'bg-emerald-100 text-emerald-700 border-emerald-200'],
+    'rejected'    => ['Rejected',     'bg-rose-100 text-rose-700 border-rose-200'],
 ];
 $pri_cfg = [
-    'low'    => ['Basse',   'bg-slate-100 text-slate-500'],
-    'medium' => ['Moyenne', 'bg-yellow-100 text-yellow-700'],
-    'high'   => ['Haute',   'bg-orange-100 text-orange-600'],
-    'urgent' => ['Urgente', 'bg-red-100 text-red-600'],
+    'low'    => ['Low',   'text-slate-500 bg-slate-100 border-slate-200'],
+    'medium' => ['Medium', 'text-blue-500 bg-blue-50 border-blue-200'],
+    'high'   => ['High',   'text-orange-500 bg-orange-50 border-orange-200'],
+    'urgent' => ['Urgent', 'text-rose-600 bg-rose-50 border-rose-200 font-bold'],
 ];
-[$sts_label, $sts_class] = $sts_cfg[$ticket['status']]   ?? [$ticket['status'], 'bg-slate-100 text-slate-600'];
-[$pri_label, $pri_class] = $pri_cfg[$ticket['priority']] ?? [$ticket['priority'], 'bg-slate-100 text-slate-500'];
+[$sts_label, $sts_class] = $sts_cfg[$ticket['status']]   ?? [ucfirst($ticket['status']), 'bg-slate-100 text-slate-600 border-slate-200'];
+[$pri_label, $pri_class] = $pri_cfg[$ticket['priority']] ?? [ucfirst($ticket['priority']), 'bg-slate-100 text-slate-500 border-slate-200'];
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= e($ticket['reference']) ?> — Admin Tickets</title>
+    <title><?= e($ticket['reference']) ?> — UniPortal Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter','sans-serif'] } } } }</script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: { brand: { 50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5' } }
+                }
+            }
+        }
+    </script>
 </head>
-<body class="bg-slate-100 font-sans min-h-screen">
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-500 selection:text-white">
 
-<!-- NAV -->
-<nav class="bg-gradient-to-r from-slate-900 to-slate-700 shadow-lg sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-        <a href="/pfe/admin/dashboard.php" class="flex items-center gap-2 text-white font-bold">
-            <i class="bi bi-ticket-perforated-fill text-blue-400"></i> TicketSystem
-            <span class="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold ml-1">Admin</span>
-        </a>
-        <div class="flex items-center gap-1 text-sm">
-            <a href="/pfe/admin/tickets/index.php" class="text-slate-300 hover:text-white hover:bg-white/10 px-3 py-1.5 rounded-lg transition"><i class="bi bi-arrow-left me-1"></i>Retour aux tickets</a>
-            <a href="/pfe/auth/logout.php"         class="text-red-400 hover:text-red-300 hover:bg-white/10 px-3 py-1.5 rounded-lg transition ml-2"><i class="bi bi-box-arrow-left me-1"></i>Déconnexion</a>
+<?php include __DIR__ . '/../includes/sidebar.php'; ?>
+
+<!-- Content Header -->
+<div class="mb-6">
+    <a href="/pfe/admin/tickets/index.php" class="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 mb-4 transition-colors">
+        <i class="bi bi-arrow-left me-1.5"></i> Back to Tickets
+    </a>
+    
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-xl bg-<?= $ticket['type'] === 'complaint' ? 'rose' : 'indigo' ?>-50 text-<?= $ticket['type'] === 'complaint' ? 'rose' : 'indigo' ?>-500 flex items-center justify-center text-xl shrink-0 mt-1">
+                <i class="bi <?= $ticket['type'] === 'complaint' ? 'bi-exclamation-octagon' : 'bi-file-earmark-text' ?>"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-3 flex-wrap mb-1">
+                    <h1 class="text-2xl font-bold text-slate-900"><?= e($ticket['subject']) ?></h1>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold border <?= $sts_class ?>"><?= $sts_label ?></span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border <?= $pri_class ?>"><i class="bi bi-flag-fill mr-1"></i><?= $pri_label ?></span>
+                </div>
+                <div class="flex items-center gap-3 text-sm text-slate-500 font-medium">
+                    <span class="font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">#<?= e($ticket['reference']) ?></span>
+                    <span>•</span>
+                    <span class="<?= $ticket['type'] === 'complaint' ? 'text-rose-500 font-semibold' : 'text-indigo-500 font-semibold' ?>"><?= $ticket['type'] === 'complaint' ? 'Complaint' : 'Request' ?></span>
+                </div>
+            </div>
         </div>
     </div>
-</nav>
+</div>
 
-<div class="max-w-6xl mx-auto px-4 py-8">
+<?php if ($flash_success): ?>
+    <div class="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl p-4 mb-6 flex items-start gap-3">
+        <i class="bi bi-check-circle-fill text-emerald-500 text-xl shrink-0 mt-0.5"></i>
+        <div class="text-sm font-medium"><?= $flash_success ?></div>
+    </div>
+<?php endif; ?>
+<?php if ($flash_error): ?>
+    <div class="bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl p-4 mb-6 flex items-start gap-3">
+        <i class="bi bi-exclamation-triangle-fill text-rose-500 text-xl shrink-0 mt-0.5"></i>
+        <div class="text-sm font-medium"><?= $flash_error ?></div>
+    </div>
+<?php endif; ?>
 
-    <!-- Flash -->
-    <?php if ($flash_success): ?>
-        <div class="bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 mb-5 flex gap-3 text-sm">
-            <i class="bi bi-check-circle-fill text-green-500 text-lg flex-shrink-0"></i>
-            <div><?= $flash_success ?></div>
-        </div>
-    <?php endif; ?>
-    <?php if ($flash_error): ?>
-        <div class="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-5 flex gap-3 text-sm">
-            <i class="bi bi-exclamation-circle-fill text-red-500 text-lg flex-shrink-0"></i>
-            <div><?= $flash_error ?></div>
-        </div>
-    <?php endif; ?>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        <!-- ===== LEFT COLUMN: Ticket content + thread ===== -->
-        <div class="lg:col-span-2 space-y-5">
-
-            <!-- Ticket Header Card -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <div class="bg-gradient-to-r from-slate-800 to-slate-600 px-6 py-4">
-                    <div class="flex items-start justify-between gap-4 flex-wrap">
-                        <div>
-                            <span class="font-mono text-sm font-semibold text-blue-300"><?= e($ticket['reference']) ?></span>
-                            <h1 class="text-white font-bold text-lg mt-1"><?= e($ticket['subject']) ?></h1>
-                        </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
-                            <span class="text-xs px-2 py-1 rounded-full font-medium <?= $sts_class ?>"><?= $sts_label ?></span>
-                            <span class="text-xs px-2 py-1 rounded-full font-medium <?= $pri_class ?>"><?= $pri_label ?></span>
-                            <span class="text-xs px-2 py-1 rounded-full font-medium <?= $ticket['type'] === 'complaint' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-700' ?>">
-                                <?= $ticket['type'] === 'complaint' ? 'Réclamation' : 'Demande' ?>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Ticket meta row -->
-                <div class="px-6 py-3 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-4 text-xs text-slate-500">
-                    <span><i class="bi bi-tag me-1"></i><?= e($ticket['category_name']) ?><?= $ticket['subcategory_name'] ? ' › ' . e($ticket['subcategory_name']) : '' ?></span>
-                    <span><i class="bi bi-calendar3 me-1"></i>Soumis le <?= $ticket['submitted_at'] ? date('d/m/Y H:i', strtotime($ticket['submitted_at'])) : '—' ?></span>
-                    <span><i class="bi bi-arrow-clockwise me-1"></i>Mis à jour <?= date('d/m/Y H:i', strtotime($ticket['updated_at'])) ?></span>
-                </div>
-
-                <!-- Description -->
-                <div class="px-6 py-5">
-                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Description</h3>
-                    <div class="text-slate-700 text-sm leading-relaxed whitespace-pre-line bg-slate-50 rounded-xl p-4 border border-slate-100">
-                        <?= e($ticket['description']) ?>
-                    </div>
-                </div>
-
-                <!-- Attachments -->
-                <?php if (!empty($attachments)): ?>
-                    <div class="px-6 pb-5">
-                        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Pièces jointes</h3>
-                        <div class="flex flex-wrap gap-2">
-                            <?php foreach ($attachments as $att): ?>
-                                <a href="/pfe/<?= e($att['file_path']) ?>" target="_blank"
-                                   class="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition border border-blue-100">
-                                    <i class="bi bi-paperclip"></i>
-                                    <?= e($att['original_name']) ?>
-                                    <span class="text-slate-400">(<?= round($att['file_size'] / 1024) ?> Ko)</span>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
+    <!-- LEFT COLUMN -->
+    <div class="lg:col-span-2 space-y-6">
+        
+        <!-- Description -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                <i class="bi bi-text-paragraph text-slate-400"></i>
+                <h3 class="font-bold text-slate-800">Student Description</h3>
             </div>
+            <div class="p-6">
+                <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-line"><?= e($ticket['description']) ?></p>
+            </div>
+        </div>
 
-            <!-- CONVERSATION THREAD & UNIFIED FORM -->
+        <!-- Attachments -->
+        <?php if (!empty($attachments)): ?>
             <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                    <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                        <i class="bi bi-chat-dots text-blue-500"></i> Conversation
-                        <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full"><?= count($responses) ?></span>
-                    </h2>
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                    <i class="bi bi-paperclip text-slate-400"></i>
+                    <h3 class="font-bold text-slate-800">Attachments</h3>
                 </div>
+                <div class="p-4">
+                    <ul class="space-y-2">
+                        <?php foreach ($attachments as $att): ?>
+                            <li>
+                                <a href="/pfe/<?= e($att['file_path']) ?>" target="_blank" class="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50 transition-colors group">
+                                    <div class="w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-indigo-100 text-slate-500 group-hover:text-indigo-600 flex items-center justify-center shrink-0">
+                                        <i class="bi bi-file-earmark"></i>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-sm font-semibold text-slate-700 group-hover:text-indigo-700 truncate"><?= e($att['original_name']) ?></p>
+                                        <p class="text-xs text-slate-400"><?= number_format($att['file_size'] / 1024, 1) ?> KB</p>
+                                    </div>
+                                    <i class="bi bi-download text-slate-300 group-hover:text-indigo-500 transition-colors"></i>
+                                </a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            </div>
+        <?php endif; ?>
 
+        <!-- Conversation & Update -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-[500px]">
+            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-chat-dots text-slate-400"></i>
+                    <h3 class="font-bold text-slate-800">Conversation History</h3>
+                </div>
+                <span class="text-xs font-semibold bg-slate-200 text-slate-600 px-2.5 py-0.5 rounded-full"><?= count($responses) ?> Replies</span>
+            </div>
+            
+            <!-- Thread -->
+            <div class="flex-1 p-6 overflow-y-auto bg-slate-50/30">
                 <?php if (empty($responses)): ?>
-                    <div class="px-6 py-8 text-center text-slate-400 text-sm">
-                        <i class="bi bi-chat-square-dots text-3xl block mb-2 opacity-30"></i>
-                        Aucun message pour l'instant.
+                    <div class="h-full flex flex-col items-center justify-center text-center py-12">
+                        <div class="w-16 h-16 rounded-full bg-slate-100 text-slate-300 flex items-center justify-center text-3xl mb-4">
+                            <i class="bi bi-chat-square-dots"></i>
+                        </div>
+                        <h4 class="text-sm font-bold text-slate-700 mb-1">No activity yet</h4>
+                        <p class="text-sm text-slate-500 max-w-sm">Start the conversation by replying below, or change the status.</p>
                     </div>
                 <?php else: ?>
-                    <div class="px-6 py-4 space-y-4">
+                    <div class="space-y-6">
                         <?php foreach ($responses as $r): ?>
                             <?php
                             if (str_starts_with($r['message'], '[SYSTEM]')) {
                                 $sys_text = e(str_replace('[SYSTEM] ', '', $r['message']));
-                                $sys_text = preg_replace('/\*\*(.*?)\*\*/', '<strong>$1</strong>', $sys_text);
+                                $sys_text = preg_replace('/\*\*(.*?)\*\*/', '<span class="font-bold text-slate-700">$1</span>', $sys_text);
                                 ?>
-                                <div class="flex justify-center my-3">
-                                    <span class="bg-slate-50 border border-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full font-medium flex items-center gap-1.5 shadow-sm">
-                                        <i class="bi bi-info-circle"></i> <?= $sys_text ?>
-                                        <span class="opacity-50 ms-1"><?= format_date_fr($r['created_at']) ?></span>
-                                    </span>
+                                <div class="flex justify-center my-4">
+                                    <div class="bg-white border border-slate-200 text-slate-500 text-xs px-4 py-2 rounded-full font-medium flex items-center gap-2 shadow-sm">
+                                        <i class="bi bi-info-circle-fill text-indigo-400"></i> 
+                                        <span><?= $sys_text ?></span>
+                                        <span class="text-slate-400 ml-2 border-l border-slate-200 pl-2"><?= format_date_en($r['created_at']) ?></span>
+                                    </div>
                                 </div>
                                 <?php
                                 continue;
                             }
-                            
+
                             $is_admin    = $r['role'] === 'admin';
                             $is_internal = (bool) $r['is_internal'];
                             $sender_name = e($r['first_name']) . ' ' . e($r['last_name']);
-                            $time_fmt    = format_date_fr($r['created_at']);
+                            $time_fmt    = format_date_en($r['created_at']);
+                            $initials    = mb_strtoupper(mb_substr($r['first_name'], 0, 1) . mb_substr($r['last_name'], 0, 1));
                             ?>
-                            <div class="flex gap-3 <?= $is_admin ? 'flex-row-reverse' : '' ?>">
+                            <div class="flex gap-4 <?= $is_admin ? 'flex-row-reverse' : '' ?>">
                                 <!-- Avatar -->
-                                <div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold
-                                            <?= $is_internal ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-200 ring-offset-1' : ($is_admin ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600') ?>">
-                                    <?= mb_strtoupper(mb_substr($r['first_name'], 0, 1)) ?>
+                                <div class="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold shadow-sm <?= $is_internal ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-200' : ($is_admin ? 'bg-slate-800 text-white' : 'bg-indigo-600 text-white') ?>">
+                                    <?= $initials ?>
                                 </div>
+                                
                                 <!-- Bubble -->
-                                <div class="flex-1 max-w-lg <?= $is_admin ? 'items-end' : 'items-start' ?> flex flex-col">
-                                    <div class="<?= $is_admin ? 'text-right' : '' ?> mb-1 flex items-center gap-2 <?= $is_admin ? 'flex-row-reverse' : '' ?>">
-                                        <span class="text-xs font-semibold text-slate-700">
-                                            <?= $sender_name ?> 
-                                            <?= $is_admin ? '<i class="bi bi-patch-check-fill text-blue-500 ms-0.5" title="Admin"></i>' : '' ?>
+                                <div class="flex-1 max-w-xl <?= $is_admin ? 'items-end' : 'items-start' ?> flex flex-col">
+                                    <div class="mb-1.5 flex items-center gap-2 <?= $is_admin ? 'flex-row-reverse' : '' ?>">
+                                        <span class="text-xs font-bold text-slate-700">
+                                            <?= $sender_name ?>
+                                            <?= $is_admin ? '<i class="bi bi-patch-check-fill text-indigo-500 ml-1" title="Admin"></i>' : '' ?>
                                         </span>
                                         <span class="text-xs text-slate-400"><?= $time_fmt ?></span>
                                         <?php if ($is_internal): ?>
-                                            <span class="text-xs bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-medium border border-amber-200">
-                                                <i class="bi bi-lock-fill"></i> Note interne
+                                            <span class="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1">
+                                                <i class="bi bi-lock-fill"></i> Internal Note
                                             </span>
                                         <?php endif; ?>
                                     </div>
-                                    <div class="text-sm px-4 py-3 leading-relaxed whitespace-pre-line shadow-sm
-                                                <?= $is_internal
-                                                    ? 'bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl rounded-tr-sm border-dashed'
-                                                    : ($is_admin ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm' : 'bg-white border border-slate-100 text-slate-700 rounded-2xl rounded-tl-sm') ?>">
+                                    <div class="text-sm px-5 py-3.5 leading-relaxed whitespace-pre-line shadow-sm <?= $is_internal ? 'bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl border-dashed '.($is_admin ? 'rounded-tr-sm' : 'rounded-tl-sm') : ($is_admin ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-sm' : 'bg-white border border-slate-100 text-slate-700 rounded-2xl rounded-tl-sm') ?>">
                                         <?= e($r['message']) ?>
                                     </div>
                                 </div>
@@ -293,184 +275,194 @@ $pri_cfg = [
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-
-                <!-- UNIFIED UPDATE FORM -->
-                <?php if ($is_closed): ?>
-                    <div class="px-6 py-6 border-t border-slate-100 bg-slate-50 text-center">
-                        <i class="bi bi-lock-fill text-slate-300 text-3xl mb-2 block"></i>
-                        <p class="text-slate-600 font-medium">Ce ticket est fermé.</p>
-                        <p class="text-sm text-slate-400 mt-1">Les réponses et modifications de statut sont désactivées.</p>
-                    </div>
-                <?php else: ?>
-                    <div class="px-6 py-5 border-t border-slate-100 bg-slate-50">
-                        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Mettre à jour le ticket</h3>
-                        <form id="update-form" method="POST" action="/pfe/admin/tickets/update_status.php">
-                            <input type="hidden" name="csrf_token"  value="<?= e($csrf) ?>">
-                            <input type="hidden" name="ticket_id"   value="<?= (int)$ticket_id ?>">
-                            <input type="hidden" name="action"      value="update">
-
-                            <!-- Row: Message -->
-                            <textarea name="message" rows="3" placeholder="Rédigez une réponse (optionnel si changement de statut uniquement)..."
-                                      class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white resize-none mb-3"></textarea>
-
-                            <!-- Row: Status & Internal Note -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-600 mb-1.5">Statut</label>
-                                    <select name="status" id="status-select" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white font-medium">
-                                        <?php
-                                        $status_options = [
-                                            'new'         => 'Nouveau',
-                                            'opened'      => 'Ouvert',
-                                            'in_progress' => 'En cours',
-                                            'completed'   => 'Résolu',
-                                            'rejected'    => 'Rejeté',
-                                        ];
-                                        foreach ($status_options as $val => $lbl):
-                                        ?>
-                                            <option value="<?= $val ?>" <?= $ticket['status'] === $val ? 'selected' : '' ?>><?= $lbl ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                
-                                <div class="flex flex-col justify-center pt-5">
-                                    <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer w-max">
-                                        <input type="checkbox" name="is_internal" value="1"
-                                               class="w-4 h-4 rounded text-amber-500 focus:ring-amber-400">
-                                        <i class="bi bi-lock-fill text-amber-500"></i>
-                                        <span>Note interne (invisible pour l'étudiant)</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Row: Rejection Reason (Hidden by default) -->
-                            <div id="rejection-wrap" class="mb-4 <?= $ticket['status'] === 'rejected' ? '' : 'hidden' ?>">
-                                <label class="block text-xs font-medium text-slate-600 mb-1">Motif de rejet <span class="text-red-500">*</span></label>
-                                <textarea name="rejection_reason" id="rejection_reason" rows="2"
-                                          class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
-                                          placeholder="Expliquez pourquoi ce ticket est rejeté..."><?= e($ticket['rejection_reason'] ?? '') ?></textarea>
-                            </div>
-
-                            <div class="flex justify-end">
-                                <button type="submit"
-                                        class="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition shadow-sm">
-                                    <i class="bi bi-send-fill"></i> Mettre à jour
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-
-        <!-- ===== RIGHT COLUMN: Admin controls ===== -->
-        <div class="space-y-5">
-
-            <!-- Student Info -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
-                    <i class="bi bi-person-circle text-blue-400"></i> Étudiant
-                </h3>
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
-                        <?= mb_strtoupper(mb_substr($ticket['student_first'], 0, 1)) ?>
-                    </div>
-                    <div>
-                        <p class="font-semibold text-slate-800"><?= e($ticket['student_first']) . ' ' . e($ticket['student_last']) ?></p>
-                        <p class="text-xs text-slate-400">@<?= e($ticket['student_username']) ?></p>
-                    </div>
-                </div>
-                <div class="space-y-1 text-sm">
-                    <div class="flex justify-between">
-                        <span class="text-slate-400">Groupe</span>
-                        <span class="font-medium text-slate-700"><?= e($ticket['group_name'] ?? '—') ?></span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-slate-400">Filière</span>
-                        <span class="font-medium text-slate-700"><?= e($ticket['filiere'] ?? '—') ?></span>
-                    </div>
-                </div>
             </div>
 
-            <!-- ASSIGN -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
-                    <i class="bi bi-person-check text-blue-400"></i> Assignation
-                </h3>
-                <?php if ($ticket['assigned_first']): ?>
-                    <div class="flex items-center gap-2 mb-3 p-2 bg-blue-50 rounded-xl border border-blue-100">
-                        <i class="bi bi-person-fill text-blue-500"></i>
-                        <span class="text-sm font-medium text-blue-700">
-                            <?= e($ticket['assigned_first']) . ' ' . e($ticket['assigned_last']) ?>
-                        </span>
+            <!-- Unified Form -->
+            <?php if ($is_closed): ?>
+                <div class="p-6 border-t border-slate-100 bg-white">
+                    <div class="bg-slate-50 border border-slate-100 rounded-xl p-6 text-center">
+                        <i class="bi bi-lock text-slate-400 text-2xl mb-2 block"></i>
+                        <h4 class="font-bold text-slate-700 mb-1">Ticket is Closed</h4>
+                        <p class="text-sm text-slate-500">Replies and status changes are disabled.</p>
                     </div>
-                <?php else: ?>
-                    <div class="flex items-center gap-2 mb-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
-                        <i class="bi bi-person text-slate-400"></i>
-                        <span class="text-sm font-medium text-slate-500">Non assigné</span>
-                    </div>
-                <?php endif; ?>
+                </div>
+            <?php else: ?>
+                <div class="p-6 border-t border-slate-100 bg-white">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Update Ticket</h3>
+                    <form id="update-form" method="POST" action="/pfe/admin/tickets/update_status.php">
+                        <input type="hidden" name="csrf_token"  value="<?= e($csrf) ?>">
+                        <input type="hidden" name="ticket_id"   value="<?= (int)$ticket_id ?>">
+                        <input type="hidden" name="action"      value="update">
 
-                <?php if ($is_closed): ?>
-                    <div class="text-xs text-slate-400 bg-slate-50 p-2 rounded-lg text-center border border-slate-100">
-                        <i class="bi bi-lock-fill"></i> Assignation verrouillée (ticket fermé)
-                    </div>
-                <?php else: ?>
-                    <form method="POST" action="/pfe/admin/tickets/assign.php">
-                        <input type="hidden" name="csrf_token" value="<?= e($csrf) ?>">
-                        <input type="hidden" name="ticket_id"  value="<?= (int)$ticket_id ?>">
+                        <textarea name="message" rows="3" placeholder="Write a reply (optional if only changing status)..."
+                                  class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow mb-4 resize-none"></textarea>
 
-                        <select name="assigned_to"
-                                class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-                            <option value="">— Non assigné —</option>
-                            <?php foreach ($admins as $adm): ?>
-                                <option value="<?= (int)$adm['id'] ?>"
-                                    <?= (int)$ticket['assigned_to'] === (int)$adm['id'] ? 'selected' : '' ?>>
-                                    <?= e($adm['first_name']) . ' ' . e($adm['last_name']) ?>
-                                    <?= (int)$adm['id'] === $admin_id ? ' (moi)' : '' ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1.5">Change Status</label>
+                                <select name="status" id="status-select" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-medium">
+                                    <?php
+                                    $status_options = [
+                                        'new'         => 'New',
+                                        'opened'      => 'Opened',
+                                        'in_progress' => 'In Progress',
+                                        'completed'   => 'Completed (Resolve)',
+                                        'rejected'    => 'Rejected',
+                                    ];
+                                    foreach ($status_options as $val => $lbl):
+                                    ?>
+                                        <option value="<?= $val ?>" <?= $ticket['status'] === $val ? 'selected' : '' ?>><?= $lbl ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-end pb-2">
+                                <label class="flex items-center gap-2 text-sm text-slate-700 font-medium cursor-pointer group select-none">
+                                    <input type="checkbox" name="is_internal" value="1" class="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 cursor-pointer">
+                                    <i class="bi bi-lock-fill text-amber-500 group-hover:text-amber-600 transition-colors"></i>
+                                    <span class="group-hover:text-slate-900 transition-colors">Internal Note (Hidden from student)</span>
+                                </label>
+                            </div>
+                        </div>
 
-                        <div class="flex gap-2">
-                            <!-- Quick self-assign -->
-                            <button type="submit" name="assigned_to" value="<?= $admin_id ?>"
-                                    class="flex-1 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-200 transition">
-                                <i class="bi bi-person-fill me-1"></i> M'assigner
-                            </button>
-                            <button type="submit"
-                                    class="flex-1 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition">
-                                Assigner
+                        <!-- Rejection Reason -->
+                        <div id="rejection-wrap" class="mb-4 <?= $ticket['status'] === 'rejected' ? '' : 'hidden' ?>">
+                            <label class="block text-xs font-bold text-rose-600 mb-1.5">Rejection Reason <span class="text-rose-500">*</span></label>
+                            <textarea name="rejection_reason" id="rejection_reason" rows="2"
+                                      class="w-full border border-rose-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 bg-rose-50/30 resize-none"
+                                      placeholder="Explain why this ticket is being rejected..."><?= e($ticket['rejection_reason'] ?? '') ?></textarea>
+                        </div>
+
+                        <div class="flex justify-end pt-2">
+                            <button type="submit" class="flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200 w-full sm:w-auto">
+                                <i class="bi bi-send-fill"></i> Update & Reply
                             </button>
                         </div>
                     </form>
-                <?php endif; ?>
-            </div>
-
-            <!-- Quick info panel -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 text-sm space-y-2">
-                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Informations</h3>
-                <div class="flex justify-between"><span class="text-slate-400">Référence</span><span class="font-mono text-blue-600 font-semibold"><?= e($ticket['reference']) ?></span></div>
-                <div class="flex justify-between"><span class="text-slate-400">Type</span><span><?= $ticket['type'] === 'complaint' ? 'Réclamation' : 'Demande' ?></span></div>
-                <div class="flex justify-between"><span class="text-slate-400">Catégorie</span><span class="text-right max-w-32 truncate" title="<?= e($ticket['category_name']) ?>"><?= e($ticket['category_name']) ?></span></div>
-                <?php if ($ticket['subcategory_name']): ?>
-                    <div class="flex justify-between"><span class="text-slate-400">Sous-catégorie</span><span class="text-right max-w-32 truncate" title="<?= e($ticket['subcategory_name']) ?>"><?= e($ticket['subcategory_name']) ?></span></div>
-                <?php endif; ?>
-                <div class="flex justify-between"><span class="text-slate-400">Créé</span><span><?= format_date_fr($ticket['created_at']) ?></span></div>
-                <?php if ($ticket['resolved_at']): ?>
-                    <div class="flex justify-between"><span class="text-slate-400">Résolu</span><span><?= format_date_fr($ticket['resolved_at']) ?></span></div>
-                <?php endif; ?>
-            </div>
-
-            <?php if ($ticket['rejection_reason']): ?>
-                <div class="bg-red-50 border border-red-200 rounded-2xl p-5 text-sm">
-                    <h3 class="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-                        <i class="bi bi-x-circle-fill"></i> Motif de rejet
-                    </h3>
-                    <p class="text-red-700 leading-relaxed"><?= e($ticket['rejection_reason']) ?></p>
                 </div>
             <?php endif; ?>
         </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="space-y-6">
+
+        <!-- Student Profile -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+                <i class="bi bi-person-badge text-indigo-400"></i> Student Profile
+            </h3>
+            <div class="flex items-center gap-4 mb-5">
+                <div class="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg shrink-0">
+                    <?= mb_strtoupper(mb_substr($ticket['student_first'], 0, 1) . mb_substr($ticket['student_last'], 0, 1)) ?>
+                </div>
+                <div>
+                    <p class="font-bold text-slate-800 text-base"><?= e($ticket['student_first']) . ' ' . e($ticket['student_last']) ?></p>
+                    <p class="text-xs font-medium text-slate-500">@<?= e($ticket['student_username']) ?></p>
+                </div>
+            </div>
+            
+            <div class="space-y-3">
+                <div class="bg-slate-50 rounded-xl p-3 flex justify-between items-center border border-slate-100">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Group</span>
+                    <span class="text-sm font-semibold text-slate-800"><?= e($ticket['group_name'] ?? 'N/A') ?></span>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 flex justify-between items-center border border-slate-100">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Field (Filière)</span>
+                    <span class="text-sm font-semibold text-slate-800"><?= e($ticket['filiere'] ?? 'N/A') ?></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assignment -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+                <i class="bi bi-person-check text-indigo-400"></i> Assignment
+            </h3>
+            
+            <?php if ($ticket['assigned_first']): ?>
+                <div class="flex items-center gap-3 mb-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                    <div class="w-8 h-8 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
+                        <?= mb_strtoupper(mb_substr($ticket['assigned_first'], 0, 1) . mb_substr($ticket['assigned_last'], 0, 1)) ?>
+                    </div>
+                    <div>
+                        <p class="text-xs text-indigo-400 font-bold uppercase tracking-wider">Assigned to</p>
+                        <p class="text-sm font-bold text-indigo-800"><?= e($ticket['assigned_first']) . ' ' . e($ticket['assigned_last']) ?></p>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="flex items-center gap-3 mb-4 p-3 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-500">
+                    <i class="bi bi-person text-xl"></i>
+                    <span class="text-sm font-medium">Currently unassigned</span>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($is_closed): ?>
+                <div class="text-xs font-semibold text-slate-400 bg-slate-50 p-3 rounded-xl text-center border border-slate-100 flex items-center justify-center gap-2">
+                    <i class="bi bi-lock-fill"></i> Assignment locked
+                </div>
+            <?php else: ?>
+                <form method="POST" action="/pfe/admin/tickets/assign.php" class="space-y-3">
+                    <input type="hidden" name="csrf_token" value="<?= e($csrf) ?>">
+                    <input type="hidden" name="ticket_id"  value="<?= (int)$ticket_id ?>">
+
+                    <select name="assigned_to" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white font-medium">
+                        <option value="">— Unassigned —</option>
+                        <?php foreach ($admins as $adm): ?>
+                            <option value="<?= (int)$adm['id'] ?>" <?= (int)$ticket['assigned_to'] === (int)$adm['id'] ? 'selected' : '' ?>>
+                                <?= e($adm['first_name']) . ' ' . e($adm['last_name']) ?>
+                                <?= (int)$adm['id'] === $admin_id ? ' (Me)' : '' ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+
+                    <div class="flex gap-2">
+                        <button type="submit" name="assigned_to" value="<?= $admin_id ?>" class="flex-1 py-2.5 bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-1">
+                            <i class="bi bi-person-fill"></i> Assign to Me
+                        </button>
+                        <button type="submit" class="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-indigo-700 transition-colors">
+                            Assign
+                        </button>
+                    </div>
+                </form>
+            <?php endif; ?>
+        </div>
+
+        <!-- Ticket Metadata -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+                <i class="bi bi-info-circle text-indigo-400"></i> Ticket Info
+            </h3>
+            <ul class="space-y-3 text-sm">
+                <li class="flex justify-between items-center pb-2 border-b border-slate-50">
+                    <span class="text-slate-500 font-medium">Category</span>
+                    <span class="font-semibold text-slate-800 text-right max-w-[150px] truncate" title="<?= e($ticket['category_name']) ?>"><?= e($ticket['category_name']) ?></span>
+                </li>
+                <?php if ($ticket['subcategory_name']): ?>
+                    <li class="flex justify-between items-center pb-2 border-b border-slate-50">
+                        <span class="text-slate-500 font-medium">Subcategory</span>
+                        <span class="font-semibold text-slate-800 text-right max-w-[150px] truncate" title="<?= e($ticket['subcategory_name']) ?>"><?= e($ticket['subcategory_name']) ?></span>
+                    </li>
+                <?php endif; ?>
+                <li class="flex justify-between items-center pb-2 border-b border-slate-50">
+                    <span class="text-slate-500 font-medium">Created</span>
+                    <span class="font-semibold text-slate-800 text-right"><?= date('M d, Y', strtotime($ticket['created_at'])) ?></span>
+                </li>
+                <?php if ($ticket['submitted_at']): ?>
+                    <li class="flex justify-between items-center pb-2 border-b border-slate-50">
+                        <span class="text-slate-500 font-medium">Submitted</span>
+                        <span class="font-semibold text-slate-800 text-right"><?= date('M d, Y', strtotime($ticket['submitted_at'])) ?></span>
+                    </li>
+                <?php endif; ?>
+                <?php if ($ticket['resolved_at']): ?>
+                    <li class="flex justify-between items-center">
+                        <span class="text-slate-500 font-medium">Resolved</span>
+                        <span class="font-semibold text-emerald-600 text-right"><?= date('M d, Y', strtotime($ticket['resolved_at'])) ?></span>
+                    </li>
+                <?php endif; ?>
+            </ul>
+        </div>
+
     </div>
 </div>
 
@@ -489,9 +481,13 @@ if (statusSelect && rejectionWrap) {
             rejectionInput.removeAttribute('required');
         }
     });
-    // Trigger on load to set correct state
+    // Trigger on load
     statusSelect.dispatchEvent(new Event('change'));
 }
 </script>
+
+        </main> <!-- /main from sidebar.php -->
+    </div> <!-- /content wrapper from sidebar.php -->
+</div> <!-- /layout flex from sidebar.php -->
 </body>
 </html>

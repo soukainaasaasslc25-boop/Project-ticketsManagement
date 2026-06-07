@@ -7,17 +7,15 @@ require_once __DIR__ . '/../includes/functions.php';
 $student_id = $_SESSION['user_id'];
 
 // Stats queries
-// Total, Demandes, Reclamations, Brouillons, Completes
 $stmt = $pdo->prepare("
     SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN type = 'request' AND status != 'draft' THEN 1 ELSE 0 END) as demandes,
-        SUM(CASE WHEN type = 'complaint' AND status != 'draft' THEN 1 ELSE 0 END) as reclamations,
+        SUM(CASE WHEN type = 'request' AND status != 'draft' THEN 1 ELSE 0 END) as total_demandes,
+        SUM(CASE WHEN type = 'complaint' AND status != 'draft' THEN 1 ELSE 0 END) as total_reclamations,
         SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as drafts,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-        SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) as new,
         SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+        SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) as new,
         SUM(CASE WHEN status = 'opened' THEN 1 ELSE 0 END) as opened,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
         SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
     FROM tickets 
     WHERE user_id = ?
@@ -25,213 +23,325 @@ $stmt = $pdo->prepare("
 $stmt->execute([$student_id]);
 $stats = $stmt->fetch();
 
+// Category chart data
+$stmt = $pdo->prepare("
+    SELECT c.name, COUNT(*) as count 
+    FROM tickets t
+    JOIN categories c ON c.id = t.category_id
+    WHERE t.user_id = ? AND t.status != 'draft'
+    GROUP BY c.name
+");
+$stmt->execute([$student_id]);
+$cat_data = $stmt->fetchAll();
+$cat_labels = json_encode(array_column($cat_data, 'name'));
+$cat_counts = json_encode(array_column($cat_data, 'count'));
+
+// Monthly activity data (last 6 months)
+$stmt = $pdo->prepare("
+    SELECT DATE_FORMAT(created_at, '%b %Y') as month, COUNT(*) as count
+    FROM tickets
+    WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) AND status != 'draft'
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m'), DATE_FORMAT(created_at, '%b %Y')
+    ORDER BY DATE_FORMAT(created_at, '%Y-%m') ASC
+");
+$stmt->execute([$student_id]);
+$monthly_data = $stmt->fetchAll();
+$monthly_labels = json_encode(array_column($monthly_data, 'month'));
+$monthly_counts = json_encode(array_column($monthly_data, 'count'));
+
 // Recent updates (last 5 tickets)
 $stmt = $pdo->prepare("
-    SELECT t.id, t.reference, t.subject, t.status, t.type, t.updated_at 
+    SELECT t.id, t.reference, t.subject, t.status, t.type, t.updated_at, c.name as category_name
     FROM tickets t
+    JOIN categories c ON c.id = t.category_id
     WHERE t.user_id = ? AND t.status != 'draft'
     ORDER BY t.updated_at DESC LIMIT 5
 ");
 $stmt->execute([$student_id]);
 $recent_tickets = $stmt->fetchAll();
 
-// Latest admin responses (ticket_responses where is_internal=0 and sender is admin)
-$stmt = $pdo->prepare("
-    SELECT r.message, r.created_at, t.reference, t.id as ticket_id
-    FROM ticket_responses r
-    JOIN tickets t ON t.id = r.ticket_id
-    JOIN users u ON u.id = r.sender_id
-    WHERE t.user_id = ? AND u.role = 'admin' AND r.is_internal = 0
-    ORDER BY r.created_at DESC LIMIT 5
-");
-$stmt->execute([$student_id]);
-$recent_responses = $stmt->fetchAll();
-
-// Get must change password flag
 $must_change_password = $_SESSION['must_change_password'] ?? 0;
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard — Espace Étudiant</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Dashboard — UniPortal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#1e1b4b' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for main area */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-500 selection:text-white">
 
 <?php include __DIR__ . '/includes/sidebar.php'; ?>
 
-<div class="main-content">
-    
-    <?php if ($must_change_password == 1): ?>
-        <div class="alert alert-warning d-flex align-items-center gap-3 border-warning mb-4" style="border-radius: 12px; background: #fffbeb;">
-            <i class="bi bi-shield-lock-fill fs-3 text-warning"></i>
-            <div>
-                <h6 class="mb-1 fw-bold text-dark">Sécurité de votre compte</h6>
-                <p class="mb-0 text-muted" style="font-size: 0.9rem;">
-                    Nous vous recommandons de modifier votre mot de passe par défaut. 
-                    <a href="/pfe/student/profile.php?first_login=1" class="fw-bold text-warning text-decoration-none">Mettre à jour &rarr;</a>
-                </p>
-            </div>
-        </div>
-    <?php endif; ?>
+<!-- Content Header -->
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <p class="text-slate-500 text-sm mt-1">Overview of your tickets and activity.</p>
+    </div>
+    <div class="flex gap-3">
+        <a href="/pfe/student/create_demande.php" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm shadow-indigo-200 transition-all flex items-center gap-2">
+            <i class="bi bi-file-earmark-plus"></i> New Request
+        </a>
+        <a href="/pfe/student/create_reclamation.php" class="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm shadow-rose-200 transition-all flex items-center gap-2">
+            <i class="bi bi-exclamation-octagon"></i> New Complaint
+        </a>
+    </div>
+</div>
 
-    <div class="d-flex justify-content-between align-items-end mb-4 flex-wrap gap-3">
+<?php if ($must_change_password == 1): ?>
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-start gap-4">
+        <div class="bg-amber-100 text-amber-600 p-2 rounded-xl shrink-0"><i class="bi bi-shield-lock-fill text-xl"></i></div>
         <div>
-            <h3 class="fw-bold text-dark mb-1">Bonjour, <?= htmlspecialchars($_SESSION['first_name']) ?> 👋</h3>
-            <p class="text-muted mb-0">Bienvenue dans votre espace étudiant.</p>
+            <h3 class="text-amber-800 font-semibold mb-1">Account Security</h3>
+            <p class="text-amber-700 text-sm mb-2">We recommend updating your default password to secure your account.</p>
+            <a href="/pfe/student/profile.php?first_login=1" class="text-amber-700 font-semibold text-sm hover:underline">Update Password &rarr;</a>
         </div>
-        <div class="d-flex gap-2">
-            <a href="/pfe/student/create_demande.php" class="btn btn-primary shadow-sm" style="border-radius: 10px;">
-                <i class="bi bi-plus-circle"></i> Demande
-            </a>
-            <a href="/pfe/student/create_reclamation.php" class="btn btn-danger shadow-sm" style="border-radius: 10px;">
-                <i class="bi bi-exclamation-circle"></i> Réclamation
-            </a>
+    </div>
+<?php endif; ?>
+
+<!-- Stats Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Total Demandes -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+            <i class="bi bi-file-earmark-text"></i>
+        </div>
+        <div>
+            <p class="text-sm font-medium text-slate-500">Total Demandes</p>
+            <h3 class="text-2xl font-bold text-slate-800"><?= (int)$stats['total_demandes'] ?></h3>
         </div>
     </div>
 
-    <!-- STATS -->
-    <div class="row g-3 mb-4">
-        <div class="col-6 col-md-3">
-            <div class="card-custom p-3 text-center h-100">
-                <div class="fs-1 fw-bold text-primary"><?= (int)$stats['total'] ?></div>
-                <div class="text-muted small text-uppercase fw-semibold">Total Tickets</div>
-            </div>
+    <!-- Total Reclamations -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl shrink-0">
+            <i class="bi bi-exclamation-triangle"></i>
         </div>
-        <div class="col-6 col-md-3">
-            <div class="card-custom p-3 text-center h-100">
-                <div class="fs-1 fw-bold text-info"><?= (int)$stats['demandes'] ?></div>
-                <div class="text-muted small text-uppercase fw-semibold">Demandes</div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card-custom p-3 text-center h-100">
-                <div class="fs-1 fw-bold text-danger"><?= (int)$stats['reclamations'] ?></div>
-                <div class="text-muted small text-uppercase fw-semibold">Réclamations</div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card-custom p-3 text-center h-100">
-                <div class="fs-1 fw-bold text-secondary"><?= (int)$stats['drafts'] ?></div>
-                <div class="text-muted small text-uppercase fw-semibold">Brouillons</div>
-            </div>
+        <div>
+            <p class="text-sm font-medium text-slate-500">Total Réclamations</p>
+            <h3 class="text-2xl font-bold text-slate-800"><?= (int)$stats['total_reclamations'] ?></h3>
         </div>
     </div>
 
-    <div class="row g-4 mb-4">
-        <div class="col-md-6">
-            <div class="card-custom h-100">
-                <div class="card-header-custom">Répartition par Statut</div>
-                <div class="p-4 d-flex justify-content-center">
-                    <canvas id="statusChart" style="max-height: 250px;"></canvas>
-                </div>
-            </div>
+    <!-- Drafts -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-xl shrink-0">
+            <i class="bi bi-pencil-square"></i>
         </div>
-        <div class="col-md-6">
-            <div class="card-custom h-100">
-                <div class="card-header-custom">Demandes vs Réclamations</div>
-                <div class="p-4 d-flex justify-content-center">
-                    <canvas id="typeChart" style="max-height: 250px;"></canvas>
-                </div>
-            </div>
+        <div>
+            <p class="text-sm font-medium text-slate-500">Brouillons</p>
+            <h3 class="text-2xl font-bold text-slate-800"><?= (int)$stats['drafts'] ?></h3>
         </div>
     </div>
 
-    <div class="row g-4">
-        <div class="col-md-6">
-            <div class="card-custom h-100">
-                <div class="card-header-custom">Tickets récemment mis à jour</div>
-                <div class="p-0">
-                    <?php if (empty($recent_tickets)): ?>
-                        <div class="p-4 text-center text-muted">Aucun ticket récent.</div>
-                    <?php else: ?>
-                        <div class="list-group list-group-flush" style="border-radius: 0 0 12px 12px;">
-                            <?php foreach ($recent_tickets as $t): ?>
-                                <?php 
-                                    $labels = ['new'=>'Nouveau', 'opened'=>'Ouvert', 'in_progress'=>'En cours', 'completed'=>'Résolu', 'rejected'=>'Rejeté'];
-                                    $lbl = $labels[$t['status']] ?? $t['status'];
-                                ?>
-                                <a href="/pfe/student/view_ticket.php?id=<?= $t['id'] ?>" class="list-group-item list-group-item-action p-3">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="fw-bold text-dark font-monospace" style="font-size:0.85rem;"><?= e($t['reference']) ?></span>
-                                        <span class="badge rounded-pill badge-<?= e($t['status']) ?> px-2 py-1"><?= $lbl ?></span>
-                                    </div>
-                                    <div class="text-muted small text-truncate"><?= e($t['subject']) ?></div>
-                                    <div class="text-muted" style="font-size: 0.7rem; margin-top: 4px;"><i class="bi bi-clock"></i> <?= date('d/m/Y H:i', strtotime($t['updated_at'])) ?></div>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
+    <!-- En Cours -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
+            <i class="bi bi-arrow-repeat"></i>
+        </div>
+        <div>
+            <p class="text-sm font-medium text-slate-500">Tickets En Cours</p>
+            <h3 class="text-2xl font-bold text-slate-800"><?= (int)$stats['in_progress'] ?></h3>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard Cards: Quick Actions + My Tickets (left) | Recent Tickets (right) -->
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+
+    <!-- LEFT COLUMN (2/5) -->
+    <div class="lg:col-span-2 flex flex-col gap-5">
+
+        <!-- Quick Actions Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-4">Quick Actions</p>
+            <div class="flex flex-col gap-3">
+
+                <!-- New Demande -->
+                <a href="/pfe/student/create_demande.php"
+                   class="group flex items-center gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 transition-all duration-200">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-200">
+                        <i class="bi bi-file-earmark-text text-base"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-slate-800">New Demande</p>
+                        <p class="text-xs text-slate-500">Submit an academic or admin request</p>
+                    </div>
+                    <i class="bi bi-arrow-right text-slate-400 group-hover:text-indigo-500 transition-colors"></i>
+                </a>
+
+                <!-- New Réclamation -->
+                <a href="/pfe/student/create_reclamation.php"
+                   class="group flex items-center gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-rose-50 hover:border-rose-200 transition-all duration-200">
+                    <div class="w-10 h-10 rounded-lg bg-rose-100 text-rose-500 flex items-center justify-center shrink-0 group-hover:bg-rose-500 group-hover:text-white transition-all duration-200">
+                        <i class="bi bi-exclamation-triangle text-base"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-slate-800">New Réclamation</p>
+                        <p class="text-xs text-slate-500">Report an issue or concern</p>
+                    </div>
+                    <i class="bi bi-arrow-right text-slate-400 group-hover:text-rose-400 transition-colors"></i>
+                </a>
+
+                <!-- View Brouillons -->
+                <a href="/pfe/student/drafts.php"
+                   class="group flex items-center gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-violet-50 hover:border-violet-200 transition-all duration-200">
+                    <div class="w-10 h-10 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center shrink-0 group-hover:bg-violet-600 group-hover:text-white transition-all duration-200">
+                        <i class="bi bi-pencil-square text-base"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-slate-800">View Brouillons</p>
+                        <p class="text-xs text-slate-500"><?= (int)$stats['drafts'] ?> saved <?= (int)$stats['drafts'] === 1 ? 'draft' : 'drafts' ?></p>
+                    </div>
+                    <i class="bi bi-arrow-right text-slate-400 group-hover:text-violet-500 transition-colors"></i>
+                </a>
+
             </div>
         </div>
-        
-        <div class="col-md-6">
-            <div class="card-custom h-100">
-                <div class="card-header-custom">Dernières réponses (Admin)</div>
-                <div class="p-0">
-                    <?php if (empty($recent_responses)): ?>
-                        <div class="p-4 text-center text-muted">Aucune réponse récente.</div>
-                    <?php else: ?>
-                        <div class="list-group list-group-flush" style="border-radius: 0 0 12px 12px;">
-                            <?php foreach ($recent_responses as $r): ?>
-                                <a href="/pfe/student/view_ticket.php?id=<?= $r['ticket_id'] ?>" class="list-group-item list-group-item-action p-3">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="fw-semibold text-primary" style="font-size:0.85rem;"><i class="bi bi-chat-left-dots"></i> <?= e($r['reference']) ?></span>
-                                        <span class="text-muted" style="font-size: 0.7rem;"><?= date('d/m/Y H:i', strtotime($r['created_at'])) ?></span>
-                                    </div>
-                                    <div class="text-muted small text-truncate">
-                                        <?= e(str_starts_with($r['message'], '[SYSTEM]') ? 'Mise à jour du statut' : $r['message']) ?>
-                                    </div>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
+
+        <!-- My Tickets Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+            <p class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-4">My Tickets</p>
+            <div class="flex flex-col gap-3">
+
+                <!-- Requests -->
+                <div class="flex items-center justify-between py-2.5 border-b border-slate-100">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0"></span>
+                        <span class="text-sm font-medium text-slate-700">Demandes</span>
+                    </div>
+                    <span class="text-sm font-bold text-slate-800"><?= (int)$stats['total_demandes'] ?></span>
                 </div>
+
+                <!-- Complaints -->
+                <div class="flex items-center justify-between py-2.5 border-b border-slate-100">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></span>
+                        <span class="text-sm font-medium text-slate-700">Réclamations</span>
+                    </div>
+                    <span class="text-sm font-bold text-slate-800"><?= (int)$stats['total_reclamations'] ?></span>
+                </div>
+
+                <!-- Drafts -->
+                <div class="flex items-center justify-between py-2.5">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-violet-400 shrink-0"></span>
+                        <span class="text-sm font-medium text-slate-700">Brouillons</span>
+                    </div>
+                    <span class="text-sm font-bold text-slate-800"><?= (int)$stats['drafts'] ?></span>
+                </div>
+
             </div>
+        </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN (3/5): Recent Tickets -->
+    <div class="lg:col-span-3">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 h-full flex flex-col">
+
+            <!-- Card Header -->
+            <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800">Recent Tickets</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Your latest submissions</p>
+                </div>
+                <a href="/pfe/student/demandes.php"
+                   class="text-sm font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors">
+                    View all <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+
+            <!-- Ticket List -->
+            <?php if (empty($recent_tickets)): ?>
+                <div class="flex-1 flex flex-col items-center justify-center py-16 text-center">
+                    <div class="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                        <i class="bi bi-inbox text-2xl text-slate-400"></i>
+                    </div>
+                    <p class="text-sm font-medium text-slate-500">No tickets yet</p>
+                    <p class="text-xs text-slate-400 mt-1">Create your first request or complaint</p>
+                </div>
+            <?php else: ?>
+                <ul class="divide-y divide-slate-100 flex-1">
+                    <?php
+                        $badge_colors = [
+                            'new'         => 'bg-blue-100 text-blue-700',
+                            'opened'      => 'bg-purple-100 text-purple-700',
+                            'in_progress' => 'bg-amber-100 text-amber-700',
+                            'completed'   => 'bg-emerald-100 text-emerald-700',
+                            'rejected'    => 'bg-rose-100 text-rose-700',
+                        ];
+                        $badge_labels = [
+                            'new'         => 'New',
+                            'opened'      => 'Opened',
+                            'in_progress' => 'In Progress',
+                            'completed'   => 'Completed',
+                            'rejected'    => 'Rejected',
+                        ];
+                    ?>
+                    <?php foreach ($recent_tickets as $t): ?>
+                        <?php
+                            $b_color = $badge_colors[$t['status']] ?? 'bg-slate-100 text-slate-600';
+                            $b_label = $badge_labels[$t['status']] ?? ucfirst($t['status']);
+                            $is_complaint = $t['type'] === 'complaint';
+                        ?>
+                        <li class="group hover:bg-slate-50 transition-colors duration-150">
+                            <a href="/pfe/student/view_ticket.php?id=<?= $t['id'] ?>"
+                               class="flex items-center px-6 py-4 gap-4">
+                                <!-- Icon -->
+                                <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 <?= $is_complaint ? 'bg-rose-50 text-rose-500' : 'bg-indigo-50 text-indigo-500' ?>">
+                                    <i class="bi <?= $is_complaint ? 'bi-exclamation-triangle' : 'bi-file-earmark-text' ?> text-sm"></i>
+                                </div>
+                                <!-- Info -->
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-semibold text-slate-800 truncate"><?= e($t['subject']) ?></p>
+                                    <p class="text-xs text-slate-400 mt-0.5 truncate">
+                                        <?= e($t['category_name']) ?> &middot; <?= date('M d', strtotime($t['updated_at'])) ?>
+                                    </p>
+                                </div>
+                                <!-- Badge + Arrow -->
+                                <div class="flex items-center gap-3 shrink-0">
+                                    <span class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <?= $b_color ?>">
+                                        <?= $b_label ?>
+                                    </span>
+                                    <i class="bi bi-chevron-right text-slate-300 text-xs group-hover:text-slate-500 transition-colors"></i>
+                                </div>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+
         </div>
     </div>
 
 </div>
 
-<script>
-const statusCtx = document.getElementById('statusChart').getContext('2d');
-new Chart(statusCtx, {
-    type: 'doughnut',
-    data: {
-        labels: ['Nouveau', 'Ouvert', 'En cours', 'Complété', 'Rejeté', 'Brouillon'],
-        datasets: [{
-            data: [
-                <?= (int)$stats['new'] ?>, 
-                <?= (int)$stats['opened'] ?>, 
-                <?= (int)$stats['in_progress'] ?>, 
-                <?= (int)$stats['completed'] ?>, 
-                <?= (int)$stats['rejected'] ?>, 
-                <?= (int)$stats['drafts'] ?>
-            ],
-            backgroundColor: ['#3b82f6', '#06b6d4', '#f97316', '#22c55e', '#ef4444', '#cbd5e1']
-        }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
-});
-
-const typeCtx = document.getElementById('typeChart').getContext('2d');
-new Chart(typeCtx, {
-    type: 'pie',
-    data: {
-        labels: ['Demandes', 'Réclamations'],
-        datasets: [{
-            data: [<?= (int)$stats['demandes'] ?>, <?= (int)$stats['reclamations'] ?>],
-            backgroundColor: ['#3b82f6', '#ef4444']
-        }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-});
-</script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+        </main> <!-- /main from sidebar.php -->
+    </div> <!-- /content wrapper from sidebar.php -->
+</div> <!-- /layout flex from sidebar.php -->
 </body>
 </html>
