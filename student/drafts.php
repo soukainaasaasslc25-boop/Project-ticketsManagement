@@ -18,7 +18,7 @@ $stmt = $pdo->prepare("
         c.name AS category_name,
         s.name AS subcategory_name
     FROM tickets t
-    JOIN categories c ON c.id = t.category_id
+    LEFT JOIN categories c ON c.id = t.category_id
     LEFT JOIN subcategories s ON s.id = t.subcategory_id
     WHERE t.user_id = :uid
       AND t.status  = 'draft'

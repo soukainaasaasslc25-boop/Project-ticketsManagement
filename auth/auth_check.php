@@ -1,5 +1,4 @@
 <?php
-// =============================================================================
 // FILE    : auth/auth_check.php
 // PURPOSE : Session & remember-me authentication guard.
 //           Include this at the TOP of any protected page.
@@ -8,7 +7,6 @@
 //   require_login()   → any logged-in user (student or admin)
 //   require_admin()   → admin only
 //   require_student() → student only
-// =============================================================================
 
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
@@ -18,11 +16,9 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-// =============================================================================
 // FUNCTION: is_logged_in()
 // Checks if the user has an active session OR a valid remember-me cookie.
 // Returns true if logged in, false if not.
-// =============================================================================
 function is_logged_in(): bool
 {
     // --- Step 1: Check if session already has user data ---
@@ -96,11 +92,9 @@ function is_logged_in(): bool
     return true;
 }
 
-// =============================================================================
 // FUNCTION: require_login()
 // Redirects to login page if the user is NOT authenticated.
 // Use this at the top of any page that requires login (student or admin).
-// =============================================================================
 function require_login(): void
 {
     if (!is_logged_in()) {
@@ -109,11 +103,9 @@ function require_login(): void
     }
 }
 
-// =============================================================================
 // FUNCTION: require_admin()
 // Redirects to login (or 403 page) if the user is NOT an admin.
 // Use this at the top of every admin page.
-// =============================================================================
 function require_admin(): void
 {
     require_login();
@@ -125,11 +117,9 @@ function require_admin(): void
     }
 }
 
-// =============================================================================
 // FUNCTION: require_student()
 // Redirects away if the user is NOT a student.
 // Use this at the top of every student page.
-// =============================================================================
 function require_student(): void
 {
     require_login();
@@ -141,11 +131,9 @@ function require_student(): void
     }
 }
 
-// =============================================================================
 // FUNCTION: delete_remember_cookie()
 // Deletes the browser cookie and removes the token from the database.
 // Called on logout or when a cookie is found to be invalid.
-// =============================================================================
 function delete_remember_cookie(): void
 {
     if (isset($_COOKIE['remember_me'])) {

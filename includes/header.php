@@ -1,5 +1,4 @@
 <?php
-// =============================================================================
 // FILE    : includes/header.php
 // PURPOSE : Shared HTML head + top navigation for admin and student areas.
 //
@@ -7,7 +6,6 @@
 //   $page_title  — string shown in <title> and page heading
 //   $layout_role — 'admin' or 'student'
 //   $active_nav  — which menu item is active (e.g. 'dashboard', 'tickets')
-// =============================================================================
 
 if (!isset($page_title, $layout_role, $active_nav)) {
     die('header.php requires $page_title, $layout_role, and $active_nav');

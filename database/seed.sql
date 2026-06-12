@@ -1,9 +1,6 @@
 -- =============================================================================
 -- PROJECT  : Student Requests & Complaints Ticket Tracking System
 -- FILE     : seed.sql
--- PURPOSE  : Default admin + sample data for testing
--- IMPORTANT: Run AFTER schema.sql has been imported successfully
--- =============================================================================
 
 USE `ticket_system`;
 
@@ -16,10 +13,7 @@ USE `ticket_system`;
 -- The hash below is generated with:
 --   password_hash('Admin@2025', PASSWORD_BCRYPT)
 --
--- To generate a new hash yourself, run this in PHP:
---   echo password_hash('Admin@2025', PASSWORD_BCRYPT);
--- =============================================================================
-
+-
 INSERT INTO `users`
     (`role`, `username`, `first_name`, `last_name`, `password_hash`,
      `group_name`, `filiere`, `account_status`)
@@ -32,21 +26,6 @@ VALUES
 
 -- =============================================================================
 -- SECTION 2: SAMPLE STUDENT ACCOUNTS
---
--- All students use the same default password: Student@123
--- All accounts are 'inactive' — they activate on first login.
---
--- Username generation rule: lowercase(last_name + first_name), no spaces
---   ASAAS + SOUKAINA       → asaassoukaina
---   CHEBA + HANANE         → chebahanane
---   EL IDRISSI + MOHAMED   → elidrissimoha (truncated for readability example)
---   BENALI + YOUSSEF       → benaliyoussef
---   EL MANSOURI + FATIMA   → elmansourifatima
---
--- Filiere rule:
---   DWB* group → "Web Development"
---   DMB* group → "Mobile Development"
--- =============================================================================
 
 INSERT INTO `users`
     (`role`, `username`, `first_name`, `last_name`, `password_hash`,
@@ -80,7 +59,7 @@ VALUES
 -- =============================================================================
 -- SECTION 3: CATEGORIES
 --
--- TWO main types only:
+
 --   'request'   → student is asking for something from administration
 --   'complaint' → student is reporting a problem
 --
@@ -94,7 +73,6 @@ VALUES
 --   5 = Réclamations pédagogiques  (complaint)
 --   6 = Réclamations techniques    (complaint)
 --   7 = Réclamations administratives (complaint)
--- =============================================================================
 
 INSERT INTO `categories` (`type`, `name`, `description`, `is_active`) VALUES
 
@@ -157,7 +135,6 @@ INSERT INTO `categories` (`type`, `name`, `description`, `is_active`) VALUES
         'Réclamations liées à l''administration : retards, erreurs dans les documents, problèmes de dossier.',
         1);
 
--- =============================================================================
 -- SECTION 4: SUBCATEGORIES
 --
 -- Each subcategory is linked to its parent category by category_id.
@@ -284,18 +261,6 @@ INSERT INTO `subcategories` (`category_id`, `name`, `description`, `is_active`) 
 
 -- =============================================================================
 -- SECTION 5: SAMPLE TICKETS
---
--- 5 tickets covering all major statuses:
---   draft, new, opened, in_progress, completed, rejected
---
--- User IDs after the inserts above:
---   1 = admin
---   2 = asaassoukaina
---   3 = chebahanane
---   4 = elidrissimohamedamine
---   5 = benaliyoussef
---   6 = elmansourifatima
--- =============================================================================
 
 INSERT INTO `tickets` (
     `reference`, `user_id`, `assigned_to`,
@@ -440,25 +405,7 @@ VALUES
         NOW() - INTERVAL 6 DAY
     );
 
--- =============================================================================
--- SECTION 7: QUICK VERIFICATION QUERIES
--- Run these in phpMyAdmin to confirm data was inserted correctly.
--- =============================================================================
 
--- List all users with their role and status:
--- SELECT id, role, username, first_name, last_name, group_name, filiere, account_status FROM users;
-
--- List all categories and subcategory count:
--- SELECT c.name, c.type, COUNT(s.id) AS subcategories
--- FROM categories c
--- LEFT JOIN subcategories s ON s.category_id = c.id
--- GROUP BY c.id;
-
--- List all tickets with student name and status:
--- SELECT t.reference, t.type, t.status, t.subject,
---        CONCAT(u.first_name, ' ', u.last_name) AS student
--- FROM tickets t
--- JOIN users u ON u.id = t.user_id;
 
 -- =============================================================================
 -- END OF SEED DATA

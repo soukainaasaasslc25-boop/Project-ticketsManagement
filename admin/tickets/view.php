@@ -47,6 +47,18 @@ if ($ticket['status'] === 'draft') {
     redirect('/admin/tickets/index.php');
 }
 
+// Auto-transition: new → opened when admin first views the ticket
+if ($ticket['status'] === 'new') {
+    $pdo->prepare("
+        UPDATE tickets
+        SET status     = 'opened',
+            updated_at = NOW()
+        WHERE id = :id AND status = 'new'
+    ")->execute([':id' => $ticket_id]);
+
+    $ticket['status'] = 'opened'; // keep in-memory state consistent
+}
+
 $is_closed = in_array($ticket['status'], ['completed', 'rejected'], true);
 
 $stmt = $pdo->prepare("
@@ -303,8 +315,8 @@ $pri_cfg = [
                                 <select name="status" id="status-select" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-medium">
                                     <?php
                                     $status_options = [
-                                        'new'         => 'New',
-                                        'opened'      => 'Opened',
+                                        // 'new'         => 'New',
+                                        // 'opened'      => 'Opened',
                                         'in_progress' => 'In Progress',
                                         'completed'   => 'Completed (Resolve)',
                                         'rejected'    => 'Rejected',

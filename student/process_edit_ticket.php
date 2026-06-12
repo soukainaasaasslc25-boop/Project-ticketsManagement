@@ -9,8 +9,6 @@
 // HOW TO TEST:
 //   1. Edit a draft ticket → click "Enregistrer" → status stays 'draft'
 //   2. Edit a draft ticket → click "Enregistrer & Soumettre" → status becomes 'new'
-//   3. Try editing a completed ticket via curl/Postman → should be rejected
-// =============================================================================
 
 require_once __DIR__ . '/../auth/auth_check.php';
 require_student();
@@ -71,8 +69,8 @@ if ((int) $ticket['user_id'] !== $student_id) {
     redirect('/student/my_tickets.php');
 }
 
-// Editable status check — only draft allowed
-$editable = ['draft'];
+// Editable status check — draft and new are editable
+$editable = ['draft', 'new'];
 if (!in_array($ticket['status'], $editable, true)) {
     $_SESSION['flash_error'] = 'Ce ticket ne peut plus être modifié — il est en cours de traitement par l\'administration.';
     redirect('/student/my_tickets.php');
@@ -180,9 +178,15 @@ $ref = e($ticket['reference']);
 
 if ($action === 'submit' && $new_status === 'new') {
     $_SESSION['flash_success'] = "Le ticket <strong>{$ref}</strong> a été mis à jour et soumis à l'administration.";
-    redirect('/student/my_tickets.php');
+    redirect('/student/dashboard.php');
 } else {
     $_SESSION['flash_success'] = "Le ticket <strong>{$ref}</strong> a été mis à jour avec succès.";
-    $back = ($new_status === 'draft') ? '/student/drafts.php' : '/student/my_tickets.php';
+    if ($new_status === 'draft') {
+        $back = '/student/drafts.php';
+    } elseif ($category['type'] === 'complaint') {
+        $back = '/student/reclamations.php';
+    } else {
+        $back = '/student/demandes.php';
+    }
     redirect($back);
 }

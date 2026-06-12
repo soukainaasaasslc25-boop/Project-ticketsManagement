@@ -145,10 +145,8 @@ $error_msg = $error_messages[$error_key] ?? '';
     </div>
 
 
-    <!-- ========================================================= -->
     <!-- RIGHT PANEL — Login form                                   -->
     <!-- Full width on mobile, half width on large screens         -->
-    <!-- ========================================================= -->
     <div class="flex-1 flex items-center justify-center p-6 sm:p-10 bg-white">
 
         <!-- Form container (max width so it doesn't stretch too wide) -->
@@ -188,13 +186,13 @@ $error_msg = $error_messages[$error_key] ?? '';
             <!-- Demo credentials box                               -->
             <!-- Remove this block before going to production       -->
             <!-- ------------------------------------------------- -->
-            <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-6 text-sm">
+            <!-- <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-6 text-sm">
                 <p class="font-semibold text-blue-800 mb-1">
                     <i class="bi bi-info-circle me-1"></i> Test accounts:
                 </p>
                 <p class="text-blue-700">Admin: <strong>admin</strong> / <strong>Admin@2025</strong></p>
                 <p class="text-blue-700">Student: <strong>asaassoukaina</strong> / <strong>Student@123</strong></p>
-            </div>
+            </div> -->
 
             <!-- ------------------------------------------------- -->
             <!-- LOGIN FORM                                         -->

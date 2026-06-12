@@ -1,8 +1,6 @@
 <?php
-// =============================================================================
 // FILE    : index.php
 // PURPOSE : Entry point — sends visitors to login or their dashboard.
-// =============================================================================
 
 require_once __DIR__ . '/auth/auth_check.php';
 require_once __DIR__ . '/includes/functions.php';

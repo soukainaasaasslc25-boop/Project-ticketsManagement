@@ -12,13 +12,6 @@
 //   - require_admin() guards the page
 //   - assigned_to value is either NULL or an existing admin user ID
 //
-// HOW TO TEST:
-//   1. Open any ticket as admin → /pfe/admin/tickets/view.php?id=X
-//   2. In the "Assignation" panel → choose an admin from dropdown → click "Assigner"
-//      → page reloads with updated "Assigné à" info
-//   3. Click "M'assigner" → your name appears immediately
-//   4. Choose "Non assigné" → assigned_to becomes NULL in DB
-// =============================================================================
 
 require_once __DIR__ . '/../../auth/auth_check.php';
 require_admin();

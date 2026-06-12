@@ -303,5 +303,9 @@ if ($action === 'submit') {
     $_SESSION['flash_success'] = "Brouillon <strong>{$reference}</strong> enregistré. Soumettez-le depuis vos tickets quand vous êtes prêt.";
 }
 
-$final_redirect = ($ticket_type === 'complaint') ? '/student/reclamations.php' : '/student/demandes.php';
-redirect($final_redirect);
+if ($action === 'draft') {
+    redirect('/student/drafts.php');
+} else {
+    $final_redirect = ($ticket_type === 'complaint') ? '/student/reclamations.php' : '/student/demandes.php';
+    redirect($final_redirect);
+}

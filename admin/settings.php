@@ -106,164 +106,154 @@ $all_categories = $pdo->query("SELECT id,name,type FROM categories ORDER BY name
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-500 selection:text-white">
 
-<?php include __DIR__ . '/includes/sidebar.php'; ?>
+<div class="flex">
+    <?php include __DIR__ . '/includes/sidebar.php'; ?>
 
-<div class="mb-6 flex justify-between items-center">
-    <div>
-        <h1 class="text-2xl font-bold text-slate-900">System Settings</h1>
-        <p class="text-slate-500 text-sm mt-1">Configure application parameters, ticket categories, and notifications.</p>
-    </div>
-</div>
-
-<?php if ($msg): ?>
-<div class="mb-5 flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl px-4 py-3 text-sm">
-    <i class="bi bi-check-circle-fill shrink-0"></i> <?= htmlspecialchars($msg) ?>
-</div>
-<?php endif; ?>
-<?php if ($error): ?>
-<div class="mb-5 flex items-center gap-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl px-4 py-3 text-sm">
-    <i class="bi bi-exclamation-circle-fill shrink-0"></i> <?= htmlspecialchars($error) ?>
-</div>
-<?php endif; ?>
-
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-    <!-- LEFT NAV -->
-    <div class="md:col-span-1">
-        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-2 space-y-1">
-            <?php
-            $navItems = [
-                ['account',       'bi-person-gear',   'Account Settings'],
-                ['categories',    'bi-tags',          'Categories'],
-                ['notifications', 'bi-bell',          'Notifications'],
-                ['security',      'bi-shield-lock',   'Security'],
-            ];
-            foreach ($navItems as [$key, $icon, $label]):
-                $active = $section === $key;
-            ?>
-            <a href="?section=<?= $key ?>"
-               class="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors <?= $active ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' ?>">
-                <i class="bi <?= $icon ?> text-lg"></i> <?= $label ?>
-            </a>
-            <?php endforeach; ?>
+    <main class="flex-1 p-8">
+        <div class="mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900">System Settings</h1>
+                <p class="text-slate-500 text-sm mt-1">Configure application parameters, ticket categories, and notifications.</p>
+            </div>
         </div>
-    </div>
 
-    <!-- RIGHT PANELS -->
-    <div class="md:col-span-2">
-
-        <!-- Account Settings -->
-        <?php if ($section === 'account'): ?>
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div class="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
-                <i class="bi bi-person-gear text-indigo-500 text-lg"></i>
-                <h2 class="font-bold text-slate-800">Account Settings (Placeholder)</h2>
-            </div>
-            <div class="p-6">
-                <div class="flex items-center gap-5 mb-8">
-                    <div class="w-20 h-20 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold">
-                        <?= mb_strtoupper(mb_substr($_SESSION['first_name'],0,1).mb_substr($_SESSION['last_name'],0,1)) ?>
-                    </div>
-                    <div>
-                        <button class="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed">Change Avatar</button>
-                        <p class="text-xs text-slate-400 mt-2">JPG, GIF or PNG. Max size of 800K</p>
-                    </div>
-                </div>
-                <div class="space-y-4 max-w-md">
-                    <div>
-                        <label class="block text-sm font-semibold text-slate-700 mb-1.5">First Name</label>
-                        <input type="text" disabled value="<?= e($_SESSION['first_name']) ?>" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-500 cursor-not-allowed">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Last Name</label>
-                        <input type="text" disabled value="<?= e($_SESSION['last_name']) ?>" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-500 cursor-not-allowed">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Email Address</label>
-                        <input type="email" disabled value="admin@uniportal.edu" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-500 cursor-not-allowed">
-                    </div>
-                </div>
-                <div class="mt-8 pt-6 border-t border-slate-100">
-                    <p class="text-sm text-slate-500"><i class="bi bi-info-circle-fill text-indigo-400 mr-1"></i>These settings are read-only in the current version.</p>
-                </div>
-            </div>
+        <?php if ($msg): ?>
+        <div class="mb-5 flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl px-4 py-3 text-sm">
+            <i class="bi bi-check-circle-fill shrink-0"></i> <?= htmlspecialchars($msg) ?>
+        </div>
+        <?php endif; ?>
+        <?php if ($error): ?>
+        <div class="mb-5 flex items-center gap-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl px-4 py-3 text-sm">
+            <i class="bi bi-exclamation-circle-fill shrink-0"></i> <?= htmlspecialchars($error) ?>
         </div>
         <?php endif; ?>
 
-        <!-- Categories -->
-        <?php if ($section === 'categories'): ?>
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div class="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
-                <i class="bi bi-tags text-indigo-500 text-lg"></i>
-                <h2 class="font-bold text-slate-800">Categories</h2>
-            </div>
-            <div class="p-6">
-                <p class="text-sm text-slate-500 mb-6">Manage ticket categories and subcategories. Only active items are visible to students.</p>
-                <button onclick="document.getElementById('modal-categories').classList.remove('hidden');document.getElementById('modal-categories').classList.add('flex')"
-                    class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-indigo-200">
-                    <i class="bi bi-tags"></i> Manage Categories
-                </button>
-                <div class="mt-6 flex gap-4">
-                    <div class="bg-slate-50 rounded-xl px-6 py-4 text-center">
-                        <p class="text-2xl font-bold text-slate-800"><?= count($categories) ?></p>
-                        <p class="text-xs text-slate-500 mt-1">Categories</p>
-                    </div>
-                    <div class="bg-slate-50 rounded-xl px-6 py-4 text-center">
-                        <p class="text-2xl font-bold text-slate-800"><?= count($subcategories) ?></p>
-                        <p class="text-xs text-slate-500 mt-1">Subcategories</p>
-                    </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            <div class="md:col-span-1">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-2 space-y-1">
+                    <?php
+                    $navItems = [
+                        ['account',       'bi-person-gear',   'Account Settings'],
+                        ['categories',    'bi-tags',          'Categories'],
+                        ['notifications', 'bi-bell',          'Notifications'],
+                        ['security',      'bi-shield-lock',   'Security'],
+                    ];
+                    foreach ($navItems as [$key, $icon, $label]):
+                        $active = $section === $key;
+                    ?>
+                    <a href="?section=<?= $key ?>"
+                       class="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors <?= $active ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' ?>">
+                        <i class="bi <?= $icon ?> text-lg"></i> <?= $label ?>
+                    </a>
+                    <?php endforeach; ?>
                 </div>
             </div>
-        </div>
-        <?php endif; ?>
 
-        <!-- Notifications -->
-        <?php if ($section === 'notifications'): ?>
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div class="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
-                <i class="bi bi-bell text-indigo-500 text-lg"></i>
-                <h2 class="font-bold text-slate-800">Notifications</h2>
-            </div>
-            <div class="p-6">
-                <p class="text-sm text-slate-500"><i class="bi bi-info-circle-fill text-indigo-400 mr-1"></i>Notification settings are not available in the current version.</p>
+            <div class="md:col-span-2">
+
+                <?php if ($section === 'account'): ?>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
+                        <i class="bi bi-person-gear text-indigo-500 text-lg"></i>
+                        <h2 class="font-bold text-slate-800">Account Settings (Placeholder)</h2>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-center gap-5 mb-8">
+                            <div class="w-20 h-20 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl font-bold">
+                                <?= mb_strtoupper(mb_substr($_SESSION['first_name'] ?? 'A',0,1).mb_substr($_SESSION['last_name'] ?? 'A',0,1)) ?>
+                            </div>
+                            <div>
+                                <button class="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed">Change Avatar</button>
+                                <p class="text-xs text-slate-400 mt-2">JPG, GIF or PNG. Max size of 800K</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4 max-w-md">
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-1.5">First Name</label>
+                                <input type="text" disabled value="<?= htmlspecialchars($_SESSION['first_name'] ?? '') ?>" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-500 cursor-not-allowed">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-1.5">Last Name</label>
+                                <input type="text" disabled value="<?= htmlspecialchars($_SESSION['last_name'] ?? '') ?>" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-500 cursor-not-allowed">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-1.5">Email Address</label>
+                                <input type="email" disabled value="admin@uniportal.edu" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-500 cursor-not-allowed">
+                            </div>
+                        </div>
+                        <div class="mt-8 pt-6 border-t border-slate-100">
+                            <p class="text-sm text-slate-500"><i class="bi bi-info-circle-fill text-indigo-400 mr-1"></i>These settings are read-only in the current version.</p>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($section === 'categories'): ?>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
+                        <i class="bi bi-tags text-indigo-500 text-lg"></i>
+                        <h2 class="font-bold text-slate-800">Categories</h2>
+                    </div>
+                    <div class="p-6">
+                        <p class="text-sm text-slate-500 mb-6">Manage ticket categories and subcategories. Only active items are visible to students.</p>
+                        <button onclick="document.getElementById('modal-categories').classList.remove('hidden');document.getElementById('modal-categories').classList.add('flex')"
+                            class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-indigo-200">
+                            <i class="bi bi-tags"></i> Manage Categories
+                        </button>
+                        <div class="mt-6 flex gap-4">
+                            <div class="bg-slate-50 rounded-xl px-6 py-4 text-center">
+                                <p class="text-2xl font-bold text-slate-800"><?= count($categories) ?></p>
+                                <p class="text-xs text-slate-500 mt-1">Categories</p>
+                            </div>
+                            <div class="bg-slate-50 rounded-xl px-6 py-4 text-center">
+                                <p class="text-2xl font-bold text-slate-800"><?= count($subcategories) ?></p>
+                                <p class="text-xs text-slate-500 mt-1">Subcategories</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($section === 'notifications'): ?>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
+                        <i class="bi bi-bell text-indigo-500 text-lg"></i>
+                        <h2 class="font-bold text-slate-800">Notifications</h2>
+                    </div>
+                    <div class="p-6">
+                        <p class="text-sm text-slate-500"><i class="bi bi-info-circle-fill text-indigo-400 mr-1"></i>Notification settings are not available in the current version.</p>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($section === 'security'): ?>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
+                        <i class="bi bi-shield-lock text-indigo-500 text-lg"></i>
+                        <h2 class="font-bold text-slate-800">Security</h2>
+                    </div>
+                    <div class="p-6">
+                        <p class="text-sm text-slate-500"><i class="bi bi-info-circle-fill text-indigo-400 mr-1"></i>Security settings are not available in the current version.</p>
+                    </div>
+                </div>
+                <?php endif; ?>
+
             </div>
         </div>
-        <?php endif; ?>
-
-        <!-- Security -->
-        <?php if ($section === 'security'): ?>
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div class="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
-                <i class="bi bi-shield-lock text-indigo-500 text-lg"></i>
-                <h2 class="font-bold text-slate-800">Security</h2>
-            </div>
-            <div class="p-6">
-                <p class="text-sm text-slate-500"><i class="bi bi-info-circle-fill text-indigo-400 mr-1"></i>Security settings are not available in the current version.</p>
-            </div>
-        </div>
-        <?php endif; ?>
-
-    </div>
+    </main>
 </div>
 
-
-<!-- ============================================================
-     LARGE CATEGORIES MODAL
-     Contains: categories table, inline form, subcategories below
-============================================================ -->
 <div id="modal-categories" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
 <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
 
-    <!-- Modal Header -->
     <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
         <h3 class="text-lg font-bold text-slate-800"><i class="bi bi-tags text-indigo-500 mr-2"></i>Manage Categories</h3>
         <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
     </div>
 
-    <!-- Scrollable content -->
     <div class="overflow-y-auto flex-1 p-6">
 
-        <!-- INLINE FORM (hidden by default, shown for add/edit) -->
         <div id="inline-form" class="hidden mb-6 bg-indigo-50 border border-indigo-100 rounded-2xl p-5">
             <div class="flex justify-between items-center mb-4">
                 <h4 id="form-title" class="font-bold text-slate-800 text-sm"></h4>
@@ -272,22 +262,20 @@ $all_categories = $pdo->query("SELECT id,name,type FROM categories ORDER BY name
             <form method="POST" id="inline-form-el" class="space-y-3">
                 <input type="hidden" name="action" id="f-action">
                 <input type="hidden" name="id" id="f-id">
-                <!-- category_id field (for subcategories) -->
+                
                 <div id="f-cat-wrapper">
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Parent Category <span class="text-rose-500">*</span></label>
                     <select name="category_id" id="f-cat" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <?php foreach ($all_categories as $c): ?>
-                            <option value="<?= $c['id'] ?>">[<?= $c['type']==='request'?'D':'R' ?>] <?= e($c['name']) ?></option>
+                            <option value="<?= $c['id'] ?>">[<?= $c['type']==='request'?'D':'R' ?>] <?= htmlspecialchars($c['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <!-- name -->
                 <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Name <span class="text-rose-500">*</span></label>
                     <input type="text" name="name" id="f-name" required placeholder="Enter name..."
                         class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
-                <!-- type (categories only) -->
                 <div id="f-type-wrapper">
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Type <span class="text-rose-500">*</span></label>
                     <select name="type" id="f-type" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -295,13 +283,11 @@ $all_categories = $pdo->query("SELECT id,name,type FROM categories ORDER BY name
                         <option value="complaint">Réclamation (Complaint)</option>
                     </select>
                 </div>
-                <!-- description -->
                 <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-1">Description <span class="text-slate-400 font-normal">(optional)</span></label>
                     <textarea name="description" id="f-desc" rows="2" placeholder="Short description..."
                         class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
                 </div>
-                <!-- is_active -->
                 <div class="flex items-center gap-2">
                     <input type="checkbox" name="is_active" id="f-active" value="1" checked class="w-4 h-4 accent-indigo-600">
                     <label for="f-active" class="text-sm font-medium text-slate-700">Active (visible to students)</label>
@@ -313,7 +299,6 @@ $all_categories = $pdo->query("SELECT id,name,type FROM categories ORDER BY name
             </form>
         </div>
 
-        <!-- CATEGORIES SECTION -->
         <div class="mb-2">
             <div class="flex justify-between items-center mb-3">
                 <h4 class="font-bold text-slate-800">Categories</h4>
@@ -339,9 +324,9 @@ $all_categories = $pdo->query("SELECT id,name,type FROM categories ORDER BY name
                 <?php else: ?>
                 <?php foreach ($categories as $cat): ?>
                 <tr id="cat-row-<?= $cat['id'] ?>"
-                    onclick="selectCategory(<?= $cat['id'] ?>, <?= json_encode($cat['name']) ?>)"
+                    onclick="selectCategory(<?= $cat['id'] ?>, <?= htmlspecialchars(json_encode($cat['name'])) ?>)"
                     class="hover:bg-slate-50 cursor-pointer transition-colors">
-                    <td class="px-4 py-3 font-semibold text-slate-800"><?= e($cat['name']) ?></td>
+                    <td class="px-4 py-3 font-semibold text-slate-800"><?= htmlspecialchars($cat['name']) ?></td>
                     <td class="px-4 py-3">
                         <?php if ($cat['type']==='request'): ?>
                             <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">Demande</span>
@@ -359,7 +344,7 @@ $all_categories = $pdo->query("SELECT id,name,type FROM categories ORDER BY name
                     </td>
                     <td class="px-4 py-3" onclick="event.stopPropagation()">
                         <div class="flex items-center gap-1">
-                            <button onclick="showCatForm(<?= $cat['id'] ?>, <?= json_encode($cat['name']) ?>, '<?= $cat['type'] ?>', <?= json_encode($cat['description']??'') ?>, <?= $cat['is_active'] ?>)"
+                            <button onclick="event.stopPropagation(); showCatForm(<?= $cat['id'] ?>, <?= htmlspecialchars(json_encode($cat['name'])) ?>, '<?= $cat['type'] ?>', <?= htmlspecialchars(json_encode($cat['description']??'')) ?>, <?= $cat['is_active'] ?>)"
                                 class="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors" title="Edit">
                                 <i class="bi bi-pencil text-xs"></i>
                             </button>
@@ -387,7 +372,6 @@ $all_categories = $pdo->query("SELECT id,name,type FROM categories ORDER BY name
             </div>
         </div>
 
-        <!-- SUBCATEGORIES SECTION (shown when a category is selected) -->
         <div id="sub-section" class="hidden mt-6">
             <div class="flex justify-between items-center mb-3">
                 <h4 class="font-bold text-slate-800 text-sm">
@@ -414,45 +398,34 @@ $all_categories = $pdo->query("SELECT id,name,type FROM categories ORDER BY name
             </div>
         </div>
 
-    </div><!-- end scrollable -->
+    </div>
 </div>
-</div><!-- end modal -->
+</div>
 
-<!-- ============================================================
-     JAVASCRIPT
-============================================================ -->
 <script>
-// All subcategories as a JS array (loaded from PHP at page start)
 var allSubs = <?= json_encode($subcategories) ?>;
 var selectedCatId = 0;
 
-// Open / close the main modal
 function closeModal() {
     document.getElementById('modal-categories').classList.add('hidden');
     document.getElementById('modal-categories').classList.remove('flex');
 }
-// Close when clicking the dark overlay
+
 document.getElementById('modal-categories').addEventListener('click', function(e) {
     if (e.target === this) closeModal();
 });
 
-// Select a category row → highlight it and show its subcategories below
 function selectCategory(id, name) {
     selectedCatId = id;
-    // Remove highlight from all rows
     document.querySelectorAll('[id^="cat-row-"]').forEach(function(row) {
         row.classList.remove('bg-indigo-50','ring-1','ring-indigo-200');
     });
-    // Highlight selected row
     document.getElementById('cat-row-' + id).classList.add('bg-indigo-50','ring-1','ring-indigo-200');
-    // Update subcategory section heading
     document.getElementById('sub-cat-name').textContent = name;
-    // Render subcategories for this category
     renderSubs(id);
     document.getElementById('sub-section').classList.remove('hidden');
 }
 
-// Render subcategory rows for the given category id
 function renderSubs(catId) {
     var filtered = allSubs.filter(function(s) { return s.category_id == catId; });
     var tbody = document.getElementById('sub-tbody');
@@ -465,30 +438,26 @@ function renderSubs(catId) {
         var badge = s.is_active == 1
             ? '<span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Active</span>'
             : '<span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">Inactive</span>';
-        // Escape name/desc for JS string usage
-        var safeName = s.name.replace(/'/g, "\\'");
-        var safeDesc = (s.description||'').replace(/'/g, "\\'");
+        
+        var safeName = s.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        var safeDesc = (s.description||'').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
         html += '<tr class="hover:bg-slate-50 border-b border-slate-100">';
         html += '<td class="px-4 py-3 font-medium text-slate-800">' + escHtml(s.name) + '</td>';
         html += '<td class="px-4 py-3">' + badge + '</td>';
         html += '<td class="px-4 py-3"><div class="flex items-center gap-1">';
-        // Edit
-        html += '<button onclick="showSubForm(' + s.id + ',' + s.category_id + ',\'' + safeName + '\',\'' + safeDesc + '\',' + s.is_active + ')" class="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50" title="Edit"><i class="bi bi-pencil text-xs"></i></button>';
-        // Toggle
+        html += '<button onclick="event.stopPropagation(); showSubForm(' + s.id + ',' + s.category_id + ',\'' + safeName + '\',\'' + safeDesc + '\',' + s.is_active + ')" class="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50" title="Edit"><i class="bi bi-pencil text-xs"></i></button>';
         html += '<form method="POST" class="inline"><input type="hidden" name="action" value="toggle_subcategory"><input type="hidden" name="id" value="' + s.id + '"><button type="submit" class="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50" title="Toggle"><i class="bi bi-arrow-repeat text-xs"></i></button></form>';
-        // Delete
         html += '<form method="POST" class="inline" onsubmit="return confirm(\'Delete this subcategory?\')"><input type="hidden" name="action" value="delete_subcategory"><input type="hidden" name="id" value="' + s.id + '"><button type="submit" class="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50" title="Delete"><i class="bi bi-trash text-xs"></i></button></form>';
         html += '</div></td></tr>';
     });
     tbody.innerHTML = html;
 }
 
-// Escape HTML to prevent XSS when building table rows from JS
 function escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Show inline form for ADD/EDIT CATEGORY
 function showCatForm(id, name, type, desc, isActive) {
     document.getElementById('f-action').value = id ? 'edit_category' : 'add_category';
     document.getElementById('f-id').value     = id;
@@ -497,16 +466,13 @@ function showCatForm(id, name, type, desc, isActive) {
     document.getElementById('f-desc').value   = desc;
     document.getElementById('f-active').checked = isActive == 1;
     document.getElementById('form-title').textContent = id ? 'Edit Category' : 'Add New Category';
-    // Show type field, hide category dropdown (that's for subcategories)
     document.getElementById('f-type-wrapper').classList.remove('hidden');
     document.getElementById('f-cat-wrapper').classList.add('hidden');
     document.getElementById('inline-form').classList.remove('hidden');
     document.getElementById('f-name').focus();
-    // Scroll to form
     document.getElementById('inline-form').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
-// Show inline form for ADD/EDIT SUBCATEGORY
 function showSubForm(id, catId, name, desc, isActive) {
     document.getElementById('f-action').value = id ? 'edit_subcategory' : 'add_subcategory';
     document.getElementById('f-id').value     = id;
@@ -515,7 +481,6 @@ function showSubForm(id, catId, name, desc, isActive) {
     document.getElementById('f-desc').value   = desc;
     document.getElementById('f-active').checked = isActive == 1;
     document.getElementById('form-title').textContent = id ? 'Edit Subcategory' : 'Add New Subcategory';
-    // Show category dropdown, hide type field
     document.getElementById('f-cat-wrapper').classList.remove('hidden');
     document.getElementById('f-type-wrapper').classList.add('hidden');
     document.getElementById('inline-form').classList.remove('hidden');
@@ -523,13 +488,11 @@ function showSubForm(id, catId, name, desc, isActive) {
     document.getElementById('inline-form').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
-// Hide the inline form
 function hideForm() {
     document.getElementById('inline-form').classList.add('hidden');
     document.getElementById('inline-form-el').reset();
 }
 
-// On page load: if ?modal=1, auto-open the modal
 <?php if ($open_modal): ?>
 window.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modal-categories').classList.remove('hidden');
@@ -537,10 +500,5 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 <?php endif; ?>
 </script>
-
-        </main>
-    </div>
-</div>
 </body>
 </html>
-

@@ -34,9 +34,7 @@ if (!$ticket) {
     redirect('/student/dashboard.php');
 }
 
-if ($ticket['status'] === 'draft') {
-    redirect('/student/edit_ticket.php?id=' . $ticket_id);
-}
+// Draft tickets are now viewable — no auto-redirect
 
 $stmt = $pdo->prepare("
     SELECT r.*, u.first_name, u.last_name, u.role
@@ -81,7 +79,9 @@ $p_color = $pri_colors[$ticket['priority']] ?? 'bg-slate-100 text-slate-700 bord
 $is_complaint = $ticket['type'] === 'complaint';
 $theme_color = $is_complaint ? 'rose' : 'indigo';
 $icon = $is_complaint ? 'bi-exclamation-octagon' : 'bi-file-earmark-text';
-$back_url = $is_complaint ? '/student/reclamations.php' : '/student/demandes.php';
+$back_url = $ticket['status'] === 'draft'
+    ? '/student/drafts.php'
+    : ($is_complaint ? '/student/reclamations.php' : '/student/demandes.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -137,6 +137,15 @@ $back_url = $is_complaint ? '/student/reclamations.php' : '/student/demandes.php
                 </div>
             </div>
         </div>
+
+        <?php if (in_array($ticket['status'], ['draft', 'new'], true)): ?>
+        <div class="shrink-0">
+            <a href="/pfe/student/edit_ticket.php?id=<?= $ticket_id ?>"
+               class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm shadow-indigo-200 transition-colors">
+                <i class="bi bi-pencil-square"></i> Edit Ticket
+            </a>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 

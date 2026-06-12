@@ -1,10 +1,8 @@
 <?php
-// =============================================================================
 // FILE    : config/app.php
 // PURPOSE : Application-wide constants (paths, URLs, upload limits).
 //           Include this wherever you need BASE_URL or upload settings.
 // USAGE   : require_once __DIR__ . '/../config/app.php';
-// =============================================================================
 
 // Base URL path — change only this if you move the project folder
 // Example: http://localhost/pfe/  →  BASE_URL = '/pfe'

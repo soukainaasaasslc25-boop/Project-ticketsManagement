@@ -1,12 +1,8 @@
 <?php
-// =============================================================================
 // FILE    : generate_hash.php
 // PURPOSE : One-time utility — generates correct bcrypt hashes for seed.sql.
 //           Run this ONCE in the browser, copy the hashes, then delete this file.
 //
-// URL     : http://localhost/pfe/generate_hash.php
-// DELETE  : Remove this file after use — it has no place in production!
-// =============================================================================
 ?>
 <!DOCTYPE html>
 <html lang="en">

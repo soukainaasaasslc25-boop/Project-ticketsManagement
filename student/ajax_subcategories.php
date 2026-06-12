@@ -1,12 +1,10 @@
 <?php
-// =============================================================================
 // FILE    : student/ajax_subcategories.php
 // PURPOSE : AJAX endpoint — returns JSON array of active subcategories
 //           for a given category_id.
 //
 // Called by: student/create_ticket.php (fetch on category change)
 // Returns  : JSON array of { id, name, description } objects, or []
-// =============================================================================
 
 require_once __DIR__ . '/../auth/auth_check.php';
 require_student();

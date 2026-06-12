@@ -600,7 +600,7 @@ document.getElementById('ticket-form').addEventListener('submit', function () {
     btnSubmit.disabled = true;
     btnSubmit.innerHTML = '<i class="bi bi-hourglass-split animate-spin"></i> Envoi...';
 });
-</script>
+</script>      create tickets + ajaxe 
 
 </body>
 </html>

@@ -7,12 +7,8 @@
 //   - CSRF token verified
 //   - Ownership verified (ticket must belong to logged-in student)
 //   - Only 'draft' tickets can be submitted here
-// HOW TO TEST:
-//   1. Create a ticket and save as draft
-//   2. Go to /pfe/student/drafts.php
-//   3. Click "Soumettre" → ticket disappears from drafts
-//   4. Check "Mes tickets" → ticket now shows "En attente"
-// =============================================================================
+
+
 
 require_once __DIR__ . '/../auth/auth_check.php';
 require_student();
