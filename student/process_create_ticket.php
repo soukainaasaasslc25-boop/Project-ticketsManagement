@@ -1,5 +1,5 @@
 <?php
-// =============================================================================
+
 // FILE    : student/process_create_ticket.php
 // PURPOSE : Handles POST from create_ticket.php
 //           1. Validates CSRF token
@@ -13,7 +13,6 @@
 // Actions (set via hidden <input name="action">):
 //   'draft'  → saves with status = 'draft',  submitted_at = NULL
 //   'submit' → saves with status = 'new',    submitted_at = NOW()
-// =============================================================================
 
 require_once __DIR__ . '/../auth/auth_check.php';
 require_student();
@@ -27,9 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect('/student/create_ticket.php');
 }
 
-// ---------------------------------------------------------------------------
 // STEP 1 — CSRF Verification
-// ---------------------------------------------------------------------------
 $submitted_token = $_POST['csrf_token'] ?? '';
 $session_token   = $_SESSION['csrf_token'] ?? '';
 
@@ -38,14 +35,10 @@ if (empty($submitted_token) || !hash_equals($session_token, $submitted_token)) {
     redirect('/student/create_ticket.php');
 }
 
-// ---------------------------------------------------------------------------
 // STEP 2 — Determine Action
-// ---------------------------------------------------------------------------
 $action = ($_POST['action'] ?? '') === 'submit' ? 'submit' : 'draft';
 
-// ---------------------------------------------------------------------------
 // STEP 3 — Collect & Sanitize Inputs
-// ---------------------------------------------------------------------------
 $category_id    = (int) ($_POST['category_id']    ?? 0);
 $subcategory_id = (int) ($_POST['subcategory_id'] ?? 0);
 $priority       = trim($_POST['priority']       ?? 'medium');
@@ -54,9 +47,7 @@ $description    = trim($_POST['description']    ?? '');
 
 $allowed_priorities = ['low', 'medium', 'high', 'urgent'];
 
-// ---------------------------------------------------------------------------
 // STEP 4 — Validation
-// ---------------------------------------------------------------------------
 $errors = [];
 
 if ($subcategory_id <= 0) {
@@ -109,9 +100,7 @@ if (!empty($errors)) {
     redirect($redirect_url);
 }
 
-// ---------------------------------------------------------------------------
 // STEP 5 — Secure File Upload
-// ---------------------------------------------------------------------------
 
 // Map of allowed MIME types to clean extensions
 $allowed_mimes = [
@@ -200,9 +189,7 @@ if (!empty($upload_errors) && $action === 'submit') {
     redirect('/student/create_ticket.php');
 }
 
-// ---------------------------------------------------------------------------
 // STEP 6 — Generate Unique Ticket Reference  (TKT-YYYY-NNNNN)
-// ---------------------------------------------------------------------------
 $student_id   = (int) $_SESSION['user_id'];
 $ticket_year  = date('Y');
 $prefix       = TICKET_REF_PREFIX . '-' . $ticket_year . '-';
@@ -220,9 +207,7 @@ $last_ref = $stmt->fetchColumn();
 $last_num  = $last_ref ? (int) substr($last_ref, strrpos($last_ref, '-') + 1) : 0;
 $reference = $prefix . str_pad($last_num + 1, 5, '0', STR_PAD_LEFT);
 
-// ---------------------------------------------------------------------------
 // STEP 7 — Insert Ticket + Attachments (inside a transaction)
-// ---------------------------------------------------------------------------
 $status       = ($action === 'submit') ? 'new'  : 'draft';
 $submitted_at = ($action === 'submit') ? date('Y-m-d H:i:s') : null;
 $ticket_type  = $category['type']; // 'request' or 'complaint'
@@ -292,9 +277,7 @@ try {
     redirect($redirect_url);
 }
 
-// ---------------------------------------------------------------------------
 // STEP 8 — Clear session and redirect with success message
-// ---------------------------------------------------------------------------
 unset($_SESSION['csrf_token'], $_SESSION['form_repopulate']);
 
 if ($action === 'submit') {

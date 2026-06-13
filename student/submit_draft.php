@@ -102,4 +102,4 @@ if ($stmt->rowCount() === 0) {
 // ---------------------------------------------------------------------------
 $ref = e($ticket['reference']);
 $_SESSION['flash_success'] = "Le ticket <strong>{$ref}</strong> a été soumis. L'administration traitera votre demande sous peu.";
-redirect('/student/my_tickets.php');
+redirect('/student/dashboard.php');

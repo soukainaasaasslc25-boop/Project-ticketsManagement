@@ -7,12 +7,6 @@
 //   - Ticket must belong to logged-in student
 //   - ONLY tickets with status = 'draft' can be deleted here
 //   - Students cannot delete submitted/in-progress/completed tickets
-// HOW TO TEST:
-//   1. Go to /pfe/student/drafts.php
-//   2. Click "Supprimer" on any draft
-//   3. Confirm the dialog → draft is gone
-//   4. Check DB: the row should no longer exist
-// =============================================================================
 
 require_once __DIR__ . '/../auth/auth_check.php';
 require_student();
@@ -47,9 +41,7 @@ if ($ticket_id <= 0) {
     redirect('/student/drafts.php');
 }
 
-// ---------------------------------------------------------------------------
 // STEP 3 — Load ticket and verify ownership + status
-// ---------------------------------------------------------------------------
 $stmt = $pdo->prepare('
     SELECT id, reference, status, user_id
     FROM tickets
@@ -76,10 +68,8 @@ if ($ticket['status'] !== 'draft') {
     redirect('/student/drafts.php');
 }
 
-// ---------------------------------------------------------------------------
 // STEP 4 — Delete the ticket (attachments cascade via FK ON DELETE CASCADE)
 // The WHERE clause includes both id, user_id AND status = draft for safety
-// ---------------------------------------------------------------------------
 $stmt = $pdo->prepare('
     DELETE FROM tickets
     WHERE id      = :id
@@ -97,9 +87,7 @@ if ($stmt->rowCount() === 0) {
     redirect('/student/drafts.php');
 }
 
-// ---------------------------------------------------------------------------
 // STEP 5 — Success redirect
-// ---------------------------------------------------------------------------
 $ref = e($ticket['reference']);
 $_SESSION['flash_success'] = "Le brouillon <strong>{$ref}</strong> a été supprimé définitivement.";
 redirect('/student/drafts.php');

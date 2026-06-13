@@ -45,7 +45,7 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([':tid' => $ticket_id]);
 $responses = $stmt->fetchAll();
-
+// historique  les messages
 $stmt = $pdo->prepare("
     SELECT * FROM ticket_attachments
     WHERE ticket_id = :tid AND response_id IS NULL

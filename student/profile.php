@@ -56,14 +56,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_error'] = "New passwords do not match.";
         } else {
             $new_hash = password_hash($new_pass, PASSWORD_BCRYPT);
-            $upd = $pdo->prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?');
+            
+            // 1. Mise à jour du mot de passe f Database
+            $upd = $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
             $upd->execute([$new_hash, $student_id]);
             
-            // Update session
-            $_SESSION['must_change_password'] = 0;
-            $_SESSION['flash_success'] = "Password updated successfully. Your account is secure.";
+            // 2. Activation du compte f Database (Puisque l-étudiant a changé son mot de passe)
+            $activate = $pdo->prepare('UPDATE users SET account_status = "active" WHERE id = ?');
+            $activate->execute([$student_id]);
             
-            // Redirect to dashboard after successful first-time setup or regular update
+            // 3. Update dial la Session bach n-tfdaw ay blocage f les autres pages
+            $_SESSION['account_status'] = 'active';
+            $_SESSION['flash_success'] = "Password updated successfully. Your account is now active and secure.";
+            
+            // Redirect to dashboard direct après l-activation
             redirect('/student/dashboard.php');
         }
         redirect('/student/profile.php' . (isset($_GET['first_login']) ? '?first_login=1' : ''));
@@ -85,7 +91,8 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrf = $_SESSION['csrf_token'];
 
-$first_login = isset($_GET['first_login']) && $_GET['first_login'] == 1;
+// Khdemna b account_status dial la session aw database hna
+$first_login = (isset($_GET['first_login']) && $_GET['first_login'] == 1) || ($user['account_status'] === 'inactive');
 
 $flash_success = $_SESSION['flash_success'] ?? null;
 $flash_error   = $_SESSION['flash_error']   ?? null;
@@ -117,13 +124,12 @@ $initials = mb_strtoupper(mb_substr($user['first_name'], 0, 1) . mb_substr($user
 
 <?php include __DIR__ . '/includes/sidebar.php'; ?>
 
-<!-- Content Header -->
 <div class="mb-6">
     <h1 class="text-2xl font-bold text-slate-900">Profile Settings</h1>
     <p class="text-slate-500 text-sm mt-1">Manage your personal information and security preferences</p>
 </div>
 
-<?php if ($first_login || $user['must_change_password'] == 1): ?>
+<?php if ($first_login): ?>
     <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-start gap-4">
         <div class="bg-amber-100 text-amber-600 p-2 rounded-xl shrink-0"><i class="bi bi-shield-lock-fill text-xl"></i></div>
         <div>
@@ -148,11 +154,9 @@ $initials = mb_strtoupper(mb_substr($user['first_name'], 0, 1) . mb_substr($user
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     
-    <!-- Left Column: Personal Info Card -->
     <div class="lg:col-span-1">
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <div class="p-8 text-center border-b border-slate-100">
-                <!-- Avatar -->
                 <div class="w-24 h-24 rounded-full bg-indigo-600 text-white flex items-center justify-center text-3xl font-bold mx-auto mb-4 shadow-lg shadow-indigo-200">
                     <?= $initials ?>
                 </div>
@@ -171,26 +175,24 @@ $initials = mb_strtoupper(mb_substr($user['first_name'], 0, 1) . mb_substr($user
                     <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Field of Study</h4>
                     <p class="text-sm font-semibold text-slate-700"><?= e($user['filiere'] ?: 'Undefined') ?></p>
                 </div>
-                <div>
-                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Account Status</h4>
-                    <?php if ($user['account_status'] === 'active'): ?>
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                            <i class="bi bi-check-circle-fill me-1.5"></i> Active
-                        </span>
-                    <?php else: ?>
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
-                            <i class="bi bi-exclamation-circle-fill me-1.5"></i> Inactive
-                        </span>
-                    <?php endif; ?>
-                </div>
+               <div>
+    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Account Status</h4>
+    <?php if (isset($_SESSION['account_status']) && $_SESSION['account_status'] === 'active'): ?>
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+            <i class="bi bi-check-circle-fill me-1.5"></i> Active
+        </span>
+    <?php else: ?>
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+            <i class="bi bi-exclamation-circle-fill me-1.5"></i> Inactive
+        </span>
+    <?php endif; ?>
+</div>
             </div>
         </div>
     </div>
 
-    <!-- Right Column: Settings Forms -->
     <div class="lg:col-span-2 space-y-6">
         
-        <!-- Username Settings -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50">
                 <i class="bi bi-person-badge text-indigo-500 text-lg"></i>
@@ -217,7 +219,6 @@ $initials = mb_strtoupper(mb_substr($user['first_name'], 0, 1) . mb_substr($user
             </div>
         </div>
 
-        <!-- Password Settings -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50">
                 <i class="bi bi-shield-lock text-indigo-500 text-lg"></i>
@@ -262,8 +263,5 @@ $initials = mb_strtoupper(mb_substr($user['first_name'], 0, 1) . mb_substr($user
     </div>
 </div>
 
-        </main> <!-- /main from sidebar.php -->
-    </div> <!-- /content wrapper from sidebar.php -->
-</div> <!-- /layout flex from sidebar.php -->
-</body>
+        </main> </div> </div> </body>
 </html>

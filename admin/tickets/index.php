@@ -72,12 +72,17 @@ $stmt = $pdo->prepare("
 ");
 foreach ($params as $k => $v) { $stmt->bindValue($k, $v); }
 $stmt->bindValue(':lim', $per_page, PDO::PARAM_INT);
+
 $stmt->bindValue(':off', $offset,   PDO::PARAM_INT);
+
 $stmt->execute();
+
 $tickets = $stmt->fetchAll();
+
 
 $flash_success = $_SESSION['flash_success'] ?? null;
 $flash_error   = $_SESSION['flash_error']   ?? null;
+
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 function aurl(array $overrides = []): string {

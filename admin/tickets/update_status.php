@@ -1,5 +1,4 @@
 <?php
-// =============================================================================
 // FILE    : admin/tickets/update_status.php
 // PURPOSE : Handles unified POST action from admin/tickets/view.php
 //
@@ -9,7 +8,6 @@
 //   - CSRF token verified
 //   - Admin role verified
 //   - Validations for status and rejection reason
-// =============================================================================
 
 require_once __DIR__ . '/../../auth/auth_check.php';
 require_admin();
@@ -21,9 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect('/admin/tickets/index.php');
 }
 
-// ---------------------------------------------------------------------------
+// -----------------
 // CSRF verification
-// ---------------------------------------------------------------------------
+// ------------------------
 if (
     empty($_POST['csrf_token']) ||
     empty($_SESSION['csrf_token']) ||
@@ -59,9 +57,9 @@ if (in_array($ticket['status'], ['completed', 'rejected'], true)) {
     redirect($back_url);
 }
 
-// ---------------------------------------------------------------------------
+// ------------------
 // Read Inputs
-// ---------------------------------------------------------------------------
+// -------------------------------
 $new_status       = trim($_POST['status'] ?? '');
 $message          = trim($_POST['message'] ?? '');
 $is_internal      = isset($_POST['is_internal']) && $_POST['is_internal'] === '1' ? 1 : 0;

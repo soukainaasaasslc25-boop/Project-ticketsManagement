@@ -1,15 +1,10 @@
 <?php
-// =============================================================================
 // FILE    : student/process_edit_ticket.php
 // PURPOSE : Handles POST from edit_ticket.php
 //           - Validates CSRF + ownership + editable status
 //           - Updates the ticket row in DB
 //           - action=save  → keeps current status (draft stays draft, new stays new)
 //           - action=submit → promotes draft to 'new' + sets submitted_at
-// HOW TO TEST:
-//   1. Edit a draft ticket → click "Enregistrer" → status stays 'draft'
-//   2. Edit a draft ticket → click "Enregistrer & Soumettre" → status becomes 'new'
-
 require_once __DIR__ . '/../auth/auth_check.php';
 require_student();
 
@@ -17,24 +12,20 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    redirect('/student/my_tickets.php');
+    redirect('/student/dashboard.php');
 }
 
-// ---------------------------------------------------------------------------
 // STEP 1 — CSRF check
-// ---------------------------------------------------------------------------
 if (
     empty($_POST['csrf_token']) ||
     empty($_SESSION['csrf_token']) ||
     !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])
 ) {
     $_SESSION['flash_error'] = 'Erreur de sécurité. Veuillez réessayer.';
-    redirect('/student/my_tickets.php');
+    redirect('/student/dashboard.php');
 }
 
-// ---------------------------------------------------------------------------
 // STEP 2 — Collect & sanitize inputs
-// ---------------------------------------------------------------------------
 $ticket_id      = (int) ($_POST['ticket_id']      ?? 0);
 $category_id    = (int) ($_POST['category_id']    ?? 0);
 $subcategory_id = (int) ($_POST['subcategory_id'] ?? 0);
@@ -46,12 +37,10 @@ $student_id     = (int) $_SESSION['user_id'];
 
 $allowed_priorities = ['low', 'medium', 'high', 'urgent'];
 
-// ---------------------------------------------------------------------------
 // STEP 3 — Load ticket, verify ownership & editable status
-// ---------------------------------------------------------------------------
 if ($ticket_id <= 0) {
     $_SESSION['flash_error'] = 'Ticket invalide.';
-    redirect('/student/my_tickets.php');
+    redirect('/student/dashboard.php');
 }
 
 $stmt = $pdo->prepare('SELECT * FROM tickets WHERE id = :id LIMIT 1');
@@ -60,25 +49,23 @@ $ticket = $stmt->fetch();
 
 if (!$ticket) {
     $_SESSION['flash_error'] = 'Ticket introuvable.';
-    redirect('/student/my_tickets.php');
+    redirect('/student/dashboard.php');
 }
 
 // Ownership check
 if ((int) $ticket['user_id'] !== $student_id) {
     $_SESSION['flash_error'] = 'Accès refusé.';
-    redirect('/student/my_tickets.php');
+    redirect('/student/dashboard.php');
 }
 
 // Editable status check — draft and new are editable
 $editable = ['draft', 'new'];
 if (!in_array($ticket['status'], $editable, true)) {
     $_SESSION['flash_error'] = 'Ce ticket ne peut plus être modifié — il est en cours de traitement par l\'administration.';
-    redirect('/student/my_tickets.php');
+    redirect('/student/dashboard.php');
 }
 
-// ---------------------------------------------------------------------------
 // STEP 4 — Validate form inputs
-// ---------------------------------------------------------------------------
 $errors = [];
 
 if ($category_id <= 0) {
@@ -121,9 +108,7 @@ if ($subcategory_id > 0 && $category) {
     }
 }
 
-// ---------------------------------------------------------------------------
 // STEP 5 — Determine new status and submitted_at
-// ---------------------------------------------------------------------------
 $new_status   = $ticket['status']; // default: keep existing status
 $submitted_at = $ticket['submitted_at'];
 
@@ -134,9 +119,7 @@ if ($action === 'submit' && $ticket['status'] === 'draft') {
 }
 // If ticket is already 'new' and action=save → keep 'new'
 
-// ---------------------------------------------------------------------------
 // STEP 6 — Run the UPDATE
-// ---------------------------------------------------------------------------
 try {
     $stmt = $pdo->prepare('
         UPDATE tickets
@@ -169,9 +152,7 @@ try {
     redirect('/student/edit_ticket.php?id=' . $ticket_id);
 }
 
-// ---------------------------------------------------------------------------
 // STEP 7 — Clear CSRF + redirect with message
-// ---------------------------------------------------------------------------
 unset($_SESSION['csrf_token'], $_SESSION['form_repopulate']);
 
 $ref = e($ticket['reference']);

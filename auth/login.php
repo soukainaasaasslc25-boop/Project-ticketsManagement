@@ -60,7 +60,7 @@
 <body class="font-sans antialiased">
 
 <?php
-// =============================================================================
+// ==
 // Read URL parameters set by process_login.php and logout.php
 //
 // ?error=empty_fields        → username or password was empty
@@ -68,7 +68,7 @@
 // ?error=session_expired     → session timed out
 // ?error=unauthorized        → student tried to access admin area
 // ?message=logged_out        → successful logout redirect
-// =============================================================================
+// ==
 
 $error_messages = [
     'empty_fields'         => 'Please enter your username and password.',
@@ -310,10 +310,10 @@ $error_msg = $error_messages[$error_key] ?? '';
 </div>
 
 <script>
-// ===========================================================================
+// 
 // Toggle password visibility
 // Clicking the eye icon switches between showing and hiding the password
-// ===========================================================================
+// 
 document.getElementById('togglePw').addEventListener('click', function () {
     const pwField = document.getElementById('password');
     const icon    = document.getElementById('togglePwIcon');
@@ -329,10 +329,10 @@ document.getElementById('togglePw').addEventListener('click', function () {
     }
 });
 
-// ===========================================================================
+// 
 // Show loading spinner when the form is submitted
 // Prevents double-clicking and gives the user visual feedback
-// ===========================================================================
+// 
 document.getElementById('loginForm').addEventListener('submit', function (e) {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;

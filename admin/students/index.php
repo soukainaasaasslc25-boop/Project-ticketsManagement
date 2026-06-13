@@ -5,18 +5,22 @@ require_admin();
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
+
 $flash_success = $_SESSION['flash_success'] ?? null;
 $flash_error   = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
 }
 $csrf = $_SESSION['csrf_token'];
 
 $search   = trim($_GET['search'] ?? '');
+
 $filiere  = trim($_GET['filiere'] ?? 'all');
 $status   = trim($_GET['status'] ?? 'all');
+
 $per_page = 15;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 
@@ -42,7 +46,9 @@ if ($status !== 'all') {
 }
 
 $cnt_stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE $where");
+
 $cnt_stmt->execute($params);
+
 $total_rows  = (int) $cnt_stmt->fetchColumn();
 $total_pages = max(1, (int) ceil($total_rows / $per_page));
 $page = min($page, $total_pages);

@@ -17,16 +17,15 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 // FUNCTION: is_logged_in()
-// Checks if the user has an active session OR a valid remember-me cookie.
-// Returns true if logged in, false if not.
+// Vérifie si l'utilisateur est connecté (via Session ou Cookie)
 function is_logged_in(): bool
 {
-    // --- Step 1: Check if session already has user data ---
+    // 1. Vérification de la session active
     if (!empty($_SESSION['user_id'])) {
         return true;
     }
 
-    // --- Step 2: Check for remember-me cookie ---
+    // 2. Vérification du cookie Remember-me
     // Cookie name is 'remember_me'
     // Cookie value format: "selector:validator"
     if (!isset($_COOKIE['remember_me'])) {
@@ -43,7 +42,7 @@ function is_logged_in(): bool
 
     [$selector, $validator] = $cookie_parts;
 
-    // --- Step 3: Look up the token in the database using selector ---
+    // 3. Récupération du token valide en Base de Données
     global $pdo;
 
     $stmt = $pdo->prepare('
@@ -64,10 +63,7 @@ function is_logged_in(): bool
         return false;
     }
 
-    // --- Step 4: Verify the validator using timing-safe comparison ---
-    // We NEVER store the plain validator in DB.
-    // We store hash('sha256', $validator) and compare hashes.
-    // hash_equals() prevents timing attacks.
+    // 4. Vérification du hash du validator (protection contre les attaques par canal auxiliaire)
     $hashed_input = hash('sha256', $validator);
     if (!hash_equals($token_row['hashed_validator'], $hashed_input)) {
         // Validator doesn't match — someone tampered with the cookie
@@ -75,26 +71,25 @@ function is_logged_in(): bool
         return false;
     }
 
-    // --- Step 5: Token is valid — rebuild the session ---
+    // 5. Le token est valide — reconstruction de la session
     $_SESSION['user_id']    = $token_row['user_id'];
     $_SESSION['username']   = $token_row['username'];
     $_SESSION['role']       = $token_row['role'];
     $_SESSION['first_name'] = $token_row['first_name'];
     $_SESSION['last_name']  = $token_row['last_name'];
 
-    // Regenerate session ID to prevent session fixation attacks
+    // régénère l'ID de session pour prévenir les attaques par fixation de session
     session_regenerate_id(true);
 
-    // Update last_login_at
+    // Met à jour last_login_at
     $update = $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?');
     $update->execute([$token_row['user_id']]);
 
     return true;
 }
 
-// FUNCTION: require_login()
-// Redirects to login page if the user is NOT authenticated.
-// Use this at the top of any page that requires login (student or admin).
+// Redirige vers la page de connexion si l'utilisateur n'est pas authentifié.
+// À utiliser au début de toute page nécessitant une connexion (étudiant ou administrateur).
 function require_login(): void
 {
     if (!is_logged_in()) {
@@ -103,37 +98,34 @@ function require_login(): void
     }
 }
 
-// FUNCTION: require_admin()
-// Redirects to login (or 403 page) if the user is NOT an admin.
-// Use this at the top of every admin page.
+// Redirige vers la page de connexion (ou 403) si l'utilisateur n'est PAS un administrateur.
+// À utiliser au début de chaque page d'administration.
 function require_admin(): void
 {
     require_login();
 
     if ($_SESSION['role'] !== 'admin') {
-        // Student tried to access admin area — deny access
+        // L'étudiant a tenté d'accéder à la zone d'administration — accès refusé
         header('Location: /pfe/auth/login.php?error=unauthorized');
         exit();
     }
 }
 
-// FUNCTION: require_student()
-// Redirects away if the user is NOT a student.
-// Use this at the top of every student page.
+// Redirige si l'utilisateur n'est PAS un étudiant.
+// À utiliser au début de chaque page étudiante.
 function require_student(): void
 {
     require_login();
 
     if ($_SESSION['role'] !== 'student') {
-        // Admin tried to access student area — redirect to admin dashboard
+        // L'administrateur a tenté d'accéder à la zone étudiante — redirection vers le tableau de bord de l'administrateur
         header('Location: /pfe/admin/dashboard.php');
         exit();
     }
 }
 
-// FUNCTION: delete_remember_cookie()
-// Deletes the browser cookie and removes the token from the database.
-// Called on logout or when a cookie is found to be invalid.
+// Supprime le cookie du navigateur et retire le token de la base de données.
+// Appelée lors de la déconnexion ou lorsqu'un cookie est jugé invalide.
 function delete_remember_cookie(): void
 {
     if (isset($_COOKIE['remember_me'])) {
@@ -142,13 +134,13 @@ function delete_remember_cookie(): void
         if (count($cookie_parts) === 2) {
             [$selector] = $cookie_parts;
 
-            // Delete the token row from the database
+            // Supprime le token de la base de données
             global $pdo;
             $stmt = $pdo->prepare('DELETE FROM remember_tokens WHERE selector = ?');
             $stmt->execute([$selector]);
         }
 
-        // Expire the cookie in the browser (set past expiry date)
+        // Supprime le cookie en définissant une date d'expiration passée
         setcookie('remember_me', '', time() - 3600, '/', '', false, true);
         unset($_COOKIE['remember_me']);
     }

@@ -32,14 +32,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)($_POST['id']??0);
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM tickets WHERE category_id=?"); $stmt->execute([$id]);
         $count = (int)$stmt->fetchColumn();
+
         if ($count > 0) { header("Location: settings.php?section=categories&modal=1&error=Cannot+delete:+{$count}+ticket(s)+linked+to+this+category"); exit; }
         $pdo->prepare("DELETE FROM categories WHERE id=?")->execute([$id]);
         header('Location: settings.php?section=categories&modal=1&msg=Category+deleted'); exit;
     }
 
-    if ($action === 'toggle_category') {
+    if ($action === 'toggle_category') 
+        {
         $id = (int)($_POST['id']??0);
+
         $pdo->prepare("UPDATE categories SET is_active=1-is_active WHERE id=?")->execute([$id]);
+        
         header('Location: settings.php?section=categories&modal=1&msg=Status+updated'); exit;
     }
 

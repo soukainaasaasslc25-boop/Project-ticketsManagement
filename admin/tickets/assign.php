@@ -36,9 +36,9 @@ if (
     redirect('/admin/tickets/index.php');
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------
 // STEP 2 — Read and validate inputs
-// ---------------------------------------------------------------------------
+// -------------------------
 $ticket_id   = (int) ($_POST['ticket_id']   ?? 0);
 // assigned_to can be empty string (unassign) or an integer admin ID
 $raw_assign  = $_POST['assigned_to'] ?? '';
